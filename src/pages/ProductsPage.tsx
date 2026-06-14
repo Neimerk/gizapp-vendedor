@@ -87,7 +87,7 @@ export default function ProductsPage() {
   }
 
   async function handleRemove(product: StoreProduct) {
-    if (!confirm(`Remover "${product.name}" da loja? O produto continua no catálogo global.`)) return;
+    if (!confirm(`Excluir "${product.name}" da sua loja? Esta ação não pode ser desfeita.`)) return;
     try {
       setRemovingId(product.id);
       const result = await removeStoreProduct(product.id);
