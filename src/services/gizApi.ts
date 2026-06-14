@@ -20,10 +20,13 @@ function authHeaders() {
 }
 
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const response = await fetch(url, {
-    ...options,
-    headers: { ...authHeaders(), ...(options.headers as Record<string, string>) },
-  });
+  const isFormData = options.body instanceof FormData;
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${getAuthToken()}`,
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(options.headers as Record<string, string>),
+  };
+  const response = await fetch(url, { ...options, headers });
   if (response.status === 401) {
     logout();
     window.location.href = "/login";
@@ -219,53 +222,31 @@ export type Order = {
 
 export async function getOrders(): Promise<Order[]> {
   const storeId = getSellerStoreId();
-
-  const response = await fetch(`${GIZ_API_URL}/api/orders/store/${storeId}`, {
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Erro ao buscar pedidos");
-  }
-
+  const response = await authFetch(`${GIZ_API_URL}/api/orders/store/${storeId}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Erro ao buscar pedidos");
   return response.json();
 }
 
 export async function getAllOrders(): Promise<Order[]> {
-  const response = await fetch(`${GIZ_API_URL}/api/orders/store/${DEFAULT_STORE_ID}`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    cache: "no-store",
-  });
+  const response = await authFetch(`${GIZ_API_URL}/api/orders/store/${DEFAULT_STORE_ID}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao buscar entregas");
   return response.json();
 }
 
 export async function getAvailableDeliveries(): Promise<Order[]> {
-  const response = await fetch(`${GIZ_API_URL}/api/orders/courier/available`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    cache: "no-store",
-  });
+  const response = await authFetch(`${GIZ_API_URL}/api/orders/courier/available`, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao buscar entregas disponíveis");
   return response.json();
 }
 
 export async function getMyCourierOrders(): Promise<Order[]> {
-  const response = await fetch(`${GIZ_API_URL}/api/orders/courier/mine`, {
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-    cache: "no-store",
-  });
+  const response = await authFetch(`${GIZ_API_URL}/api/orders/courier/mine`, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao buscar minhas entregas");
   return response.json();
 }
 
 export async function acceptDelivery(orderId: string): Promise<Order> {
-  const response = await fetch(`${GIZ_API_URL}/api/orders/${orderId}/courier/accept`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${getAuthToken()}` },
-  });
+  const response = await authFetch(`${GIZ_API_URL}/api/orders/${orderId}/courier/accept`, { method: "POST" });
   if (!response.ok) {
     const err = await response.json().catch(() => null);
     throw new Error(err?.message || "Erro ao aceitar entrega");
@@ -344,16 +325,9 @@ export async function getCatalogProducts(search = ""): Promise<CatalogProduct[]>
 }
 
 export async function addProductFromCatalog(productId: string) {
-  const response = await fetch(`${GIZ_API_URL}/api/storeproducts/add-from-catalog`, {
+  const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/add-from-catalog`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
-    body: JSON.stringify({
-      storeId: getSellerStoreId(),
-      productId,
-    }),
+    body: JSON.stringify({ storeId: getSellerStoreId(), productId }),
   });
 
   if (!response.ok) {
@@ -366,14 +340,10 @@ export async function addProductFromCatalog(productId: string) {
 
 export async function uploadProductImage(file: File): Promise<string> {
   const formData = new FormData();
-
   formData.append("file", file);
 
-  const response = await fetch(`${GIZ_API_URL}/api/products/upload-image`, {
+  const response = await authFetch(`${GIZ_API_URL}/api/products/upload-image`, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${getAuthToken()}`,
-    },
     body: formData,
   });
 
@@ -383,7 +353,6 @@ export async function uploadProductImage(file: File): Promise<string> {
   }
 
   const data = await response.json();
-
   return data.imageUrl;
 }
 
