@@ -10,14 +10,6 @@ function getSellerStoreId() {
   return getAuth()?.storeId || DEFAULT_STORE_ID;
 }
 
-function authHeaders() {
-  const token = getAuthToken();
-
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-}
 
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const isFormData = options.body instanceof FormData;
