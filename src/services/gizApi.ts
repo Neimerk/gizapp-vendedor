@@ -3,6 +3,9 @@ import { getAuth, getAuthToken, logout } from "./auth";
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
 
+const IMAGE_BASE_URL: string =
+  import.meta.env.VITE_IMAGE_BASE_URL || GIZ_API_URL;
+
 export const DEFAULT_STORE_ID =
   "b5c148b0-a07b-4532-aca3-e66c12f389af";
 
@@ -213,8 +216,12 @@ export type Order = {
 };
 
 export async function getOrders(): Promise<Order[]> {
-  const storeId = getSellerStoreId();
-  const response = await authFetch(`${GIZ_API_URL}/api/orders/store/${storeId}`, { cache: "no-store" });
+  const auth = getAuth();
+  const url =
+    auth?.role === "Admin"
+      ? `${GIZ_API_URL}/api/orders/admin`
+      : `${GIZ_API_URL}/api/orders/store/${getSellerStoreId()}`;
+  const response = await authFetch(url, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao buscar pedidos");
   return response.json();
 }
@@ -268,7 +275,9 @@ export function getProductImageUrl(imageUrl?: string) {
 
   if (imageUrl.startsWith("http")) return imageUrl;
 
-  return `${GIZ_API_URL}${imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`}`;
+  const base = IMAGE_BASE_URL.replace(/\/$/, "");
+  const path = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
+  return `${base}${path}`;
 }
 
 export type CatalogProduct = {
