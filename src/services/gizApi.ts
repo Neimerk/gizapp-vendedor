@@ -164,6 +164,7 @@ export async function updateStoreProduct(
     promotionalPrice?: number | null;
     stock: number;
     available: boolean;
+    imageAlt?: string;
   }
 ): Promise<StoreProduct> {
   const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${id}`, {
