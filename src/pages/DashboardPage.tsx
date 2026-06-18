@@ -45,7 +45,8 @@ export default function DashboardPage() {
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [loading, setLoading] = useState(true);
 
-  if (auth?.role === "Courier" && !auth?.storeId) {
+  const canSell = auth?.role === "Seller" || auth?.role === "Admin" || (auth?.role === "Courier" && !!auth?.storeId);
+  if (!canSell) {
     return <Navigate to="/entregas" replace />;
   }
 
@@ -97,7 +98,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <p className="text-xs font-black uppercase tracking-widest text-[#7c3aed]">Visão geral</p>
+        <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Central Operacional</p>
         <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Dashboard</h1>
       </div>
 
@@ -111,7 +112,7 @@ export default function DashboardPage() {
           small
         />
         <StatCard
-          icon={<ReceiptText size={18} className="text-[#7c3aed]" />}
+          icon={<ReceiptText size={18} className="text-[#16a34a]" />}
           bg="bg-purple-50"
           label="Em andamento"
           value={String(stats.pending)}
@@ -154,11 +155,11 @@ export default function DashboardPage() {
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-black text-[#0f172a]">Pedidos recentes</h2>
-            <p className="text-xs text-[#94a3b8]">Últimos {recentOrders.length} pedidos da loja</p>
+            <p className="text-xs text-[#94a3b8]">Últimos {recentOrders.length} pedidos do negócio</p>
           </div>
           <Link
             to="/pedidos"
-            className="flex items-center gap-1.5 rounded-xl border border-[#e2e8f0] px-4 py-2 text-xs font-black text-[#64748b] hover:border-[#7c3aed]/30 hover:text-[#7c3aed]"
+            className="flex items-center gap-1.5 rounded-xl border border-[#e2e8f0] px-4 py-2 text-xs font-black text-[#64748b] hover:border-[#16a34a]/30 hover:text-[#16a34a]"
           >
             Ver todos <ArrowRight size={13} />
           </Link>
@@ -168,7 +169,7 @@ export default function DashboardPage() {
           <div className="rounded-2xl border border-dashed border-[#e2e8f0] bg-[#f8fafc] py-12 text-center">
             <ReceiptText size={28} className="mx-auto mb-3 text-[#cbd5e1]" />
             <p className="font-black text-[#64748b]">Nenhum pedido recebido ainda</p>
-            <p className="mt-1 text-xs text-[#94a3b8]">Os novos pedidos aparecem aqui em tempo real</p>
+            <p className="mt-1 text-xs text-[#94a3b8]">Novos pedidos aparecem aqui em tempo real via BrasUX</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-[#e8eaf0]">

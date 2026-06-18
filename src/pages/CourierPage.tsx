@@ -12,6 +12,10 @@ import {
   Truck,
   User,
   Zap,
+  Map,
+  ChevronDown,
+  ChevronUp,
+  Locate,
 } from "lucide-react";
 
 import {
@@ -24,6 +28,8 @@ import {
 } from "../services/gizApi";
 import { ordersConnection, startOrdersConnection } from "../services/signalr";
 import { getAuth } from "../services/auth";
+import { useGeolocation } from "../hooks/useGeolocation";
+import DeliveryMap from "../components/map/DeliveryMap";
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 
@@ -56,7 +62,11 @@ function timeAgo(d: string) {
 function isToday(d: string) {
   const t = new Date(d);
   const n = new Date();
-  return t.getDate() === n.getDate() && t.getMonth() === n.getMonth() && t.getFullYear() === n.getFullYear();
+  return (
+    t.getDate() === n.getDate() &&
+    t.getMonth() === n.getMonth() &&
+    t.getFullYear() === n.getFullYear()
+  );
 }
 
 function googleMapsUrl(order: Order) {
@@ -71,8 +81,21 @@ function whatsappUrl(phone: string) {
   return `https://wa.me/55${clean}`;
 }
 
+function deliveryAddressString(order: Order) {
+  return [
+    order.deliveryAddress,
+    order.deliveryNumber,
+    order.deliveryComplement,
+    order.deliveryNeighborhood,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
 export default function CourierPage() {
   const auth = getAuth();
+  const { coords: courierCoords, loading: geoLoading, error: geoError } = useGeolocation();
+
   const [tab, setTab] = useState<Tab>("available");
   const [available, setAvailable] = useState<Order[]>([]);
   const [mine, setMine] = useState<Order[]>([]);
@@ -105,26 +128,17 @@ export default function CourierPage() {
     async function setupSignalR() {
       try {
         await startOrdersConnection();
-
-        // Novo pedido saindo para entrega — aparece em Disponíveis
         ordersConnection.off("OrderCreated");
         ordersConnection.on("OrderCreated", () => load(true));
-
-        // Atualização de status — refaz listas
         ordersConnection.off("OrderStatusUpdated");
         ordersConnection.on("OrderStatusUpdated", (updated: Order) => {
           setMine((cur) => cur.map((o) => (o.id === updated.id ? updated : o)));
-          // remove dos disponíveis se foi aceito
           setAvailable((cur) => cur.filter((o) => o.id !== updated.id));
         });
-
-        // Outro entregador aceitou — remove dos disponíveis
         ordersConnection.off("DeliveryTaken");
         ordersConnection.on("DeliveryTaken", (taken: Order) => {
           setAvailable((cur) => cur.filter((o) => o.id !== taken.id));
         });
-
-        // Eu aceitei — vai para as minhas
         ordersConnection.off("DeliveryAccepted");
         ordersConnection.on("DeliveryAccepted", (order: Order) => {
           setMine((cur) =>
@@ -164,7 +178,9 @@ export default function CourierPage() {
     setDelivering(orderId);
     try {
       await updateOrderStatus(orderId, 4);
-      setMine((cur) => cur.map((o) => (o.id === orderId ? { ...o, status: 4 } : o)));
+      setMine((cur) =>
+        cur.map((o) => (o.id === orderId ? { ...o, status: 4 } : o))
+      );
     } catch (e) {
       alert(e instanceof Error ? e.message : "Erro ao confirmar entrega.");
     } finally {
@@ -173,7 +189,10 @@ export default function CourierPage() {
   }
 
   const active = useMemo(() => mine.filter((o) => o.status === 3), [mine]);
-  const history = useMemo(() => mine.filter((o) => o.status === 4 || o.status === 5), [mine]);
+  const history = useMemo(
+    () => mine.filter((o) => o.status === 4 || o.status === 5),
+    [mine]
+  );
 
   const todayDeliveries = useMemo(
     () => history.filter((o) => o.status === 4 && isToday(o.updatedAt)),
@@ -184,10 +203,18 @@ export default function CourierPage() {
     [todayDeliveries]
   );
 
-  const { page: availPage, setPage: setAvailPage, totalPages: availTotal, pageItems: availItems } =
-    usePagination(available, PAGE_SIZE);
-  const { page: histPage, setPage: setHistPage, totalPages: histTotal, pageItems: histItems } =
-    usePagination(history, PAGE_SIZE);
+  const {
+    page: availPage,
+    setPage: setAvailPage,
+    totalPages: availTotal,
+    pageItems: availItems,
+  } = usePagination(available, PAGE_SIZE);
+  const {
+    page: histPage,
+    setPage: setHistPage,
+    totalPages: histTotal,
+    pageItems: histItems,
+  } = usePagination(history, PAGE_SIZE);
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "available", label: "Disponíveis", count: available.length },
@@ -200,26 +227,54 @@ export default function CourierPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-widest text-[#7c3aed]">
-            Olá, {auth?.name?.split(" ")[0] ?? "Entregador"}
+          <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">
+            Olá, {auth?.name?.split(" ")[0] ?? "Parceiro"}
           </p>
-          <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Entregas</h1>
+          <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Logística</h1>
         </div>
-        <button
-          onClick={() => load(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-black text-[#64748b] shadow-sm hover:bg-[#f8fafc]"
-        >
-          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-          Atualizar
-        </button>
+        <div className="flex items-center gap-3">
+          {/* GPS status */}
+          <div className="flex items-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-xs font-bold shadow-sm">
+            <Locate size={13} className={courierCoords ? "text-green-500" : geoLoading ? "text-amber-400" : "text-[#94a3b8]"} />
+            {geoLoading
+              ? <span className="text-amber-500 animate-pulse">Localizando…</span>
+              : courierCoords
+              ? <span className="text-green-600">GPS ativo</span>
+              : <span className="text-[#94a3b8]">{geoError ? "GPS negado" : "GPS inativo"}</span>
+            }
+          </div>
+          <button
+            onClick={() => load(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-black text-[#64748b] shadow-sm hover:bg-[#f8fafc]"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-3 gap-3">
-        <StatCard icon={<Truck size={18} className="text-white" />} color="bg-orange-500" label="Em andamento" value={active.length} />
-        <StatCard icon={<CheckCircle size={18} className="text-white" />} color="bg-green-500" label="Entregues hoje" value={todayDeliveries.length} />
-        <StatCard icon={<DollarSign size={18} className="text-white" />} color="bg-[#7c3aed]" label="Ganhos hoje" value={formatBRL(todayEarnings)} small />
+        <StatCard
+          icon={<Truck size={18} className="text-white" />}
+          color="bg-orange-500"
+          label="Em andamento"
+          value={active.length}
+        />
+        <StatCard
+          icon={<CheckCircle size={18} className="text-white" />}
+          color="bg-green-500"
+          label="Entregues hoje"
+          value={todayDeliveries.length}
+        />
+        <StatCard
+          icon={<DollarSign size={18} className="text-white" />}
+          color="bg-[#16a34a]"
+          label="Ganhos hoje"
+          value={formatBRL(todayEarnings)}
+          small
+        />
       </div>
 
       {/* Tabs */}
@@ -230,15 +285,19 @@ export default function CourierPage() {
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black transition-colors ${
               tab === t.key
-                ? "bg-[#7c3aed] text-white shadow-sm shadow-[#7c3aed]/30"
+                ? "bg-[#16a34a] text-white shadow-sm shadow-[#16a34a]/30"
                 : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
             }`}
           >
             {t.label}
             {t.count > 0 && (
-              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
-                tab === t.key ? "bg-white/25 text-white" : "bg-[#f1f5f9] text-[#94a3b8]"
-              }`}>
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                  tab === t.key
+                    ? "bg-white/25 text-white"
+                    : "bg-[#f1f5f9] text-[#94a3b8]"
+                }`}
+              >
                 {t.count}
               </span>
             )}
@@ -249,7 +308,10 @@ export default function CourierPage() {
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-3xl bg-white shadow-sm" />
+            <div
+              key={i}
+              className="h-40 animate-pulse rounded-3xl bg-white shadow-sm"
+            />
           ))}
         </div>
       ) : (
@@ -259,9 +321,9 @@ export default function CourierPage() {
             <div>
               {availItems.length === 0 ? (
                 <EmptyState
-                  icon={<Zap size={36} className="text-[#7c3aed]" />}
+                  icon={<Zap size={36} className="text-[#16a34a]" />}
                   title="Nenhuma entrega disponível"
-                  subtitle="Assim que o vendedor marcar um pedido como 'Saiu para entrega', ele aparecerá aqui."
+                  subtitle="Assim que o pedido for marcado como 'Saiu para entrega', ele aparecerá aqui para aceite."
                 />
               ) : (
                 <>
@@ -270,12 +332,19 @@ export default function CourierPage() {
                       <AvailableCard
                         key={order.id}
                         order={order}
+                        courierCoords={courierCoords}
                         onAccept={() => handleAccept(order.id)}
                         accepting={accepting === order.id}
                       />
                     ))}
                   </div>
-                  <Pagination page={availPage} totalPages={availTotal} totalItems={available.length} pageSize={PAGE_SIZE} onPageChange={setAvailPage} />
+                  <Pagination
+                    page={availPage}
+                    totalPages={availTotal}
+                    totalItems={available.length}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setAvailPage}
+                  />
                 </>
               )}
             </div>
@@ -286,7 +355,7 @@ export default function CourierPage() {
             <div>
               {active.length === 0 ? (
                 <EmptyState
-                  icon={<Truck size={36} className="text-[#7c3aed]" />}
+                  icon={<Truck size={36} className="text-[#16a34a]" />}
                   title="Nenhuma entrega em andamento"
                   subtitle="Aceite uma entrega na aba Disponíveis."
                 />
@@ -296,6 +365,7 @@ export default function CourierPage() {
                     <ActiveCard
                       key={order.id}
                       order={order}
+                      courierCoords={courierCoords}
                       onDeliver={() => handleDeliver(order.id)}
                       delivering={delivering === order.id}
                     />
@@ -310,7 +380,7 @@ export default function CourierPage() {
             <div>
               {histItems.length === 0 ? (
                 <EmptyState
-                  icon={<Star size={36} className="text-[#7c3aed]" />}
+                  icon={<Star size={36} className="text-[#16a34a]" />}
                   title="Nenhuma entrega realizada ainda"
                   subtitle="Seu histórico de entregas aparecerá aqui."
                 />
@@ -321,7 +391,13 @@ export default function CourierPage() {
                       <HistoryCard key={order.id} order={order} />
                     ))}
                   </div>
-                  <Pagination page={histPage} totalPages={histTotal} totalItems={history.length} pageSize={PAGE_SIZE} onPageChange={setHistPage} />
+                  <Pagination
+                    page={histPage}
+                    totalPages={histTotal}
+                    totalItems={history.length}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setHistPage}
+                  />
                 </>
               )}
             </div>
@@ -332,10 +408,14 @@ export default function CourierPage() {
   );
 }
 
-// ── SUB-COMPONENTS ────────────────────────────────────────────────────────────
+// ── SUB-COMPONENTS ──────────────────────────────────────────────────────────
 
 function StatCard({
-  icon, color, label, value, small,
+  icon,
+  color,
+  label,
+  value,
+  small,
 }: {
   icon: React.ReactNode;
   color: string;
@@ -345,19 +425,33 @@ function StatCard({
 }) {
   return (
     <div className="rounded-3xl border border-[#e8eaf0] bg-white p-4 shadow-sm">
-      <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${color}`}>
+      <div
+        className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${color}`}
+      >
         {icon}
       </div>
-      <p className={`font-black text-[#0f172a] ${small ? "text-lg" : "text-2xl"}`}>{value}</p>
+      <p
+        className={`font-black text-[#0f172a] ${small ? "text-lg" : "text-2xl"}`}
+      >
+        {value}
+      </p>
       <p className="mt-0.5 text-[10px] text-[#94a3b8]">{label}</p>
     </div>
   );
 }
 
-function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle: string }) {
+function EmptyState({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#7c3aed]/10">
+      <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-[#16a34a]/10">
         {icon}
       </div>
       <h3 className="mt-4 text-base font-black text-[#0f172a]">{title}</h3>
@@ -368,18 +462,22 @@ function EmptyState({ icon, title, subtitle }: { icon: React.ReactNode; title: s
 
 function AvailableCard({
   order,
+  courierCoords,
   onAccept,
   accepting,
 }: {
   order: Order;
+  courierCoords: [number, number] | null;
   onAccept: () => void;
   accepting: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   return (
     <div className="overflow-hidden rounded-3xl border border-[#e8eaf0] bg-white shadow-sm">
-      <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-[#7c3aed] to-[#2563eb] px-5 py-3.5">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20">
             <Package size={15} className="text-white" />
@@ -400,9 +498,10 @@ function AvailableCard({
       </div>
 
       <div className="px-5 py-4">
+        {/* Address + phone */}
         <div className="mb-3 space-y-1.5">
           <div className="flex items-start gap-2 text-sm text-[#64748b]">
-            <MapPin size={14} className="mt-0.5 shrink-0 text-[#7c3aed]" />
+            <MapPin size={14} className="mt-0.5 shrink-0 text-[#16a34a]" />
             <span>
               {order.deliveryAddress}, {order.deliveryNumber}
               {order.deliveryComplement ? ` — ${order.deliveryComplement}` : ""}
@@ -417,20 +516,56 @@ function AvailableCard({
           )}
         </div>
 
+        {/* Actions row */}
         <div className="mb-4 flex items-center justify-between">
           <span className="text-xs text-[#94a3b8]">{timeAgo(order.updatedAt)}</span>
-          <button onClick={() => setExpanded((v) => !v)} className="text-xs font-black text-[#7c3aed]">
-            {expanded ? "Ocultar itens" : `${order.items.length} ${order.items.length === 1 ? "item" : "itens"}`}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowMap((v) => !v)}
+              className="flex items-center gap-1 text-xs font-black text-[#16a34a]"
+            >
+              <Map size={13} />
+              {showMap ? "Ocultar mapa" : "Ver mapa"}
+            </button>
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-xs font-black text-[#16a34a]"
+            >
+              {expanded
+                ? "Ocultar itens"
+                : `${order.items.length} ${order.items.length === 1 ? "item" : "itens"}`}
+            </button>
+          </div>
         </div>
 
+        {/* Map */}
+        {showMap && (
+          <div className="mb-4">
+            <DeliveryMap
+              address={deliveryAddressString(order)}
+              courierCoords={courierCoords}
+              height={240}
+            />
+          </div>
+        )}
+
+        {/* Items */}
         {expanded && (
           <div className="mb-4 space-y-2 border-t border-[#f1f5f9] pt-3">
             {order.items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-2.5">
-                <img src={getProductImageUrl(item.imageUrl)} alt={item.productName} className="h-10 w-10 rounded-lg object-cover" />
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-2.5"
+              >
+                <img
+                  src={getProductImageUrl(item.imageUrl)}
+                  alt={item.productName}
+                  className="h-10 w-10 rounded-lg object-cover"
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">{item.quantity}× {item.productName}</p>
+                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">
+                    {item.quantity}× {item.productName}
+                  </p>
                   <p className="text-xs text-[#64748b]">{formatBRL(item.totalPrice)}</p>
                 </div>
               </div>
@@ -441,7 +576,7 @@ function AvailableCard({
         <button
           onClick={onAccept}
           disabled={accepting}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#7c3aed] to-[#2563eb] py-3.5 text-sm font-black text-white shadow-lg shadow-[#7c3aed]/25 transition-transform active:scale-[0.98] disabled:opacity-60"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3.5 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 transition-transform active:scale-[0.98] disabled:opacity-60"
         >
           <Truck size={16} />
           {accepting ? "Aceitando..." : "Aceitar entrega"}
@@ -453,36 +588,45 @@ function AvailableCard({
 
 function ActiveCard({
   order,
+  courierCoords,
   onDeliver,
   delivering,
 }: {
   order: Order;
+  courierCoords: [number, number] | null;
   onDeliver: () => void;
   delivering: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showItems, setShowItems] = useState(false);
+  const [mapOpen, setMapOpen] = useState(true);
   const mapsUrl = googleMapsUrl(order);
   const waUrl = order.customerPhone ? whatsappUrl(order.customerPhone) : null;
 
   return (
     <div className="overflow-hidden rounded-3xl border border-orange-200 bg-white shadow-sm shadow-orange-100">
+      {/* Header */}
       <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-orange-500 to-amber-400 px-5 py-3.5">
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20">
             <Truck size={15} className="text-white" />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">Em andamento</p>
+            <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">
+              Em andamento
+            </p>
             <p className="text-sm font-black text-white">{order.customerName}</p>
           </div>
         </div>
         <div className="text-right">
           <p className="text-lg font-black text-white">{formatBRL(order.total)}</p>
-          <p className="text-xs font-bold text-amber-100">Taxa: {formatBRL(order.deliveryFee)}</p>
+          <p className="text-xs font-bold text-amber-100">
+            Taxa: {formatBRL(order.deliveryFee)}
+          </p>
         </div>
       </div>
 
       <div className="px-5 py-4">
+        {/* Address */}
         <div className="mb-3 space-y-1.5">
           <div className="flex items-start gap-2 text-sm text-[#64748b]">
             <MapPin size={14} className="mt-0.5 shrink-0 text-orange-500" />
@@ -495,8 +639,32 @@ function ActiveCard({
           {order.customerPhone && (
             <div className="flex items-center gap-2 text-sm text-[#64748b]">
               <User size={14} className="shrink-0" />
-              <span>{order.customerName} · {order.customerPhone}</span>
+              <span>
+                {order.customerName} · {order.customerPhone}
+              </span>
             </div>
+          )}
+        </div>
+
+        {/* Map section */}
+        <div className="mb-4">
+          <button
+            onClick={() => setMapOpen((v) => !v)}
+            className="mb-2 flex w-full items-center justify-between rounded-xl bg-orange-50 px-3 py-2 text-xs font-black text-orange-700 transition-colors hover:bg-orange-100"
+          >
+            <span className="flex items-center gap-1.5">
+              <Map size={13} />
+              Mapa da rota
+            </span>
+            {mapOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+
+          {mapOpen && (
+            <DeliveryMap
+              address={deliveryAddressString(order)}
+              courierCoords={courierCoords}
+              height={300}
+            />
           )}
         </div>
 
@@ -508,8 +676,8 @@ function ActiveCard({
             rel="noopener noreferrer"
             className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-2.5 text-xs font-black text-[#0f172a]"
           >
-            <Navigation size={13} className="text-[#7c3aed]" />
-            Abrir mapa
+            <Navigation size={13} className="text-[#16a34a]" />
+            Navegar
           </a>
           {waUrl && (
             <a
@@ -524,20 +692,36 @@ function ActiveCard({
           )}
         </div>
 
+        {/* Items toggle */}
         <div className="mb-4 flex items-center justify-between">
           <span className="text-xs text-[#94a3b8]">{timeAgo(order.updatedAt)}</span>
-          <button onClick={() => setExpanded((v) => !v)} className="text-xs font-black text-[#7c3aed]">
-            {expanded ? "Ocultar itens" : `${order.items.length} ${order.items.length === 1 ? "item" : "itens"}`}
+          <button
+            onClick={() => setShowItems((v) => !v)}
+            className="flex items-center gap-1 text-xs font-black text-[#16a34a]"
+          >
+            {showItems ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+            {showItems
+              ? "Ocultar itens"
+              : `${order.items.length} ${order.items.length === 1 ? "item" : "itens"}`}
           </button>
         </div>
 
-        {expanded && (
+        {showItems && (
           <div className="mb-4 space-y-2 border-t border-[#f1f5f9] pt-3">
             {order.items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-2.5">
-                <img src={getProductImageUrl(item.imageUrl)} alt={item.productName} className="h-10 w-10 rounded-lg object-cover" />
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl bg-[#f8fafc] p-2.5"
+              >
+                <img
+                  src={getProductImageUrl(item.imageUrl)}
+                  alt={item.productName}
+                  className="h-10 w-10 rounded-lg object-cover"
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">{item.quantity}× {item.productName}</p>
+                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">
+                    {item.quantity}× {item.productName}
+                  </p>
                   <p className="text-xs text-[#64748b]">{formatBRL(item.totalPrice)}</p>
                 </div>
               </div>
@@ -563,11 +747,25 @@ function HistoryCard({ order }: { order: Order }) {
   const delivered = order.status === 4;
 
   return (
-    <div className={`overflow-hidden rounded-3xl border shadow-sm ${delivered ? "border-green-100 bg-green-50/40" : "border-red-100 bg-red-50/30"}`}>
-      <div className={`flex items-center justify-between gap-3 px-5 py-3.5 ${delivered ? "bg-green-500" : "bg-red-400"}`}>
+    <div
+      className={`overflow-hidden rounded-3xl border shadow-sm ${
+        delivered
+          ? "border-green-100 bg-green-50/40"
+          : "border-red-100 bg-red-50/30"
+      }`}
+    >
+      <div
+        className={`flex items-center justify-between gap-3 px-5 py-3.5 ${
+          delivered ? "bg-green-500" : "bg-red-400"
+        }`}
+      >
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20">
-            {delivered ? <CheckCircle size={15} className="text-white" /> : <Clock size={15} className="text-white" />}
+            {delivered ? (
+              <CheckCircle size={15} className="text-white" />
+            ) : (
+              <Clock size={15} className="text-white" />
+            )}
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wide text-white/80">
@@ -578,7 +776,11 @@ function HistoryCard({ order }: { order: Order }) {
         </div>
         <div className="text-right">
           <p className="text-base font-black text-white">{formatBRL(order.total)}</p>
-          {delivered && <p className="text-xs font-bold text-green-100">+{formatBRL(order.deliveryFee)}</p>}
+          {delivered && (
+            <p className="text-xs font-bold text-green-100">
+              +{formatBRL(order.deliveryFee)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -592,7 +794,10 @@ function HistoryCard({ order }: { order: Order }) {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-[#94a3b8]">{timeAgo(order.updatedAt)}</span>
-            <button onClick={() => setExpanded((v) => !v)} className="text-xs font-black text-[#7c3aed]">
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="text-xs font-black text-[#16a34a]"
+            >
               {expanded ? "Fechar" : "Detalhes"}
             </button>
           </div>
@@ -601,12 +806,23 @@ function HistoryCard({ order }: { order: Order }) {
         {expanded && (
           <div className="mt-3 space-y-2 border-t border-[#f1f5f9] pt-3">
             {order.items.map((item) => (
-              <div key={item.id} className="flex items-center gap-3 rounded-xl bg-white p-2.5">
-                <img src={getProductImageUrl(item.imageUrl)} alt={item.productName} className="h-9 w-9 rounded-lg object-cover" />
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl bg-white p-2.5"
+              >
+                <img
+                  src={getProductImageUrl(item.imageUrl)}
+                  alt={item.productName}
+                  className="h-9 w-9 rounded-lg object-cover"
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">{item.quantity}× {item.productName}</p>
+                  <p className="text-xs font-black text-[#0f172a] line-clamp-1">
+                    {item.quantity}× {item.productName}
+                  </p>
                 </div>
-                <span className="text-xs font-black text-[#7c3aed]">{formatBRL(item.totalPrice)}</span>
+                <span className="text-xs font-black text-[#16a34a]">
+                  {formatBRL(item.totalPrice)}
+                </span>
               </div>
             ))}
           </div>

@@ -97,7 +97,7 @@ export default function OrdersPage() {
         ordersConnection.off("OrderStatusUpdated");
 
         ordersConnection.on("OrderCreated", (newOrder: Order) => {
-          setToastMessage("Um novo pedido chegou na sua loja.");
+          setToastMessage("Novo pedido recebido no BrasUX Loja!");
           setToastVisible(true);
           playOrderSound();
           setOrders((cur) =>
@@ -175,7 +175,7 @@ export default function OrdersPage() {
             onClick={() => { setFilter(f.value); setPage(1); }}
             className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black transition-colors ${
               filter === f.value
-                ? "bg-[#7c3aed] text-white shadow-sm shadow-[#7c3aed]/30"
+                ? "bg-[#16a34a] text-white shadow-sm shadow-[#16a34a]/30"
                 : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
             }`}
           >
@@ -249,7 +249,7 @@ export default function OrdersPage() {
                           <p className="text-sm font-black text-[#0f172a]">
                             {item.quantity}× {item.productName}
                           </p>
-                          <p className="text-sm font-black text-[#7c3aed]">
+                          <p className="text-sm font-black text-[#16a34a]">
                             {formatMoney(item.totalPrice)}
                           </p>
                         </div>
@@ -282,7 +282,7 @@ export default function OrdersPage() {
                           <button
                             onClick={() => handleStatus(order.id, nextAction.value)}
                             disabled={updatingId === order.id}
-                            className="rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#2563eb] px-4 py-2 text-sm font-black text-white disabled:opacity-60"
+                            className="rounded-xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-4 py-2 text-sm font-black text-white disabled:opacity-60"
                           >
                             {updatingId === order.id ? "Atualizando..." : nextAction.label}
                           </button>

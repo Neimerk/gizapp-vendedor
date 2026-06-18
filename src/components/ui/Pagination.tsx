@@ -80,7 +80,7 @@ function PageBtn({
       aria-label={ariaLabel}
       className={`flex h-8 min-w-8 items-center justify-center rounded-xl px-2 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
         active
-          ? "bg-[#7c3aed] text-white shadow-sm shadow-[#7c3aed]/40"
+          ? "bg-[#16a34a] text-white shadow-sm shadow-[#16a34a]/40"
           : "bg-white border border-[#e2e8f0] text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a]"
       }`}
     >

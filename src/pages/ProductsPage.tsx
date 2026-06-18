@@ -184,7 +184,7 @@ export default function ProductsPage() {
         <button
           type="button"
           onClick={() => setCatalogOpen(true)}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#7c3aed] to-[#2563eb] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#7c3aed]/25"
+          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
         >
           <PackagePlus size={18} />
           Adicionar do catálogo
@@ -219,7 +219,7 @@ export default function ProductsPage() {
             {search ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
           </p>
           {search && (
-            <button onClick={() => setSearch("")} className="mt-2 text-sm font-bold text-[#7c3aed]">
+            <button onClick={() => setSearch("")} className="mt-2 text-sm font-bold text-[#16a34a]">
               Limpar busca
             </button>
           )}
@@ -288,7 +288,7 @@ export default function ProductsPage() {
                           step="0.01"
                           value={product.price}
                           onChange={(e) => updateLocal(product.id, "price", Number(e.target.value))}
-                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#7c3aed]/20"
+                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
                         />
                       </div>
                       <div>
@@ -302,7 +302,7 @@ export default function ProductsPage() {
                           onChange={(e) =>
                             updateLocal(product.id, "promotionalPrice", e.target.value ? Number(e.target.value) : null)
                           }
-                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#7c3aed]/20"
+                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
                         />
                       </div>
                       <div>
@@ -313,7 +313,7 @@ export default function ProductsPage() {
                           type="number"
                           value={product.stock}
                           onChange={(e) => updateLocal(product.id, "stock", Number(e.target.value))}
-                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#7c3aed]/20"
+                          className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
                         />
                       </div>
                       <div className="flex items-end gap-4">
@@ -322,7 +322,7 @@ export default function ProductsPage() {
                             type="checkbox"
                             checked={product.available}
                             onChange={(e) => updateLocal(product.id, "available", e.target.checked)}
-                            className="h-4 w-4 accent-[#7c3aed]"
+                            className="h-4 w-4 accent-[#16a34a]"
                           />
                           Ativo
                         </label>
@@ -334,7 +334,7 @@ export default function ProductsPage() {
                         type="button"
                         onClick={() => handleSave(product)}
                         disabled={savingId === product.id || removingId === product.id}
-                        className="rounded-xl bg-gradient-to-r from-[#7c3aed] to-[#2563eb] px-5 py-2 text-sm font-black text-white disabled:opacity-60"
+                        className="rounded-xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-2 text-sm font-black text-white disabled:opacity-60"
                       >
                         {savingId === product.id ? "Salvando..." : "Salvar"}
                       </button>

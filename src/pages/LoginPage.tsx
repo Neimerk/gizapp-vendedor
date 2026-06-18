@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { Eye, EyeOff, Zap } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { loginSeller } from "../services/gizApi";
-import { saveAuth } from "../services/auth";
-import { getAuth } from "../services/auth";
+import { saveAuth, getAuth } from "../services/auth";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("albertoneimerk@gmail.com");
-  const [password, setPassword] = useState("123456789");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -20,7 +19,7 @@ export default function LoginPage() {
       const auth = await loginSeller({ email, password });
       const allowed = ["Seller", "Admin", "Courier"];
       if (!allowed.includes(auth.role)) {
-        alert("Este acesso é exclusivo para vendedores e entregadores.");
+        alert("Acesso exclusivo para lojistas e entregadores parceiros.");
         return;
       }
       saveAuth(auth);
@@ -35,21 +34,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#f0f2f7] px-5">
+    <div className="flex min-h-screen items-center justify-center bg-[#f0f9f4] px-5">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7c3aed] to-[#2563eb] shadow-xl shadow-[#7c3aed]/30">
-            <Zap size={28} className="fill-[#ffd400] text-[#ffd400]" />
+          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center">
+            <img
+              src="/logo-brasux.webp"
+              alt="BrasUX"
+              className="h-20 w-20 object-contain drop-shadow-xl"
+            />
           </div>
-          <p className="text-xs font-black uppercase tracking-widest text-[#7c3aed]">
-            GizApp
+          <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">
+            BrasUX
           </p>
           <h1 className="mt-1 text-3xl font-black text-[#0f172a]">
-            Painel
+            Loja
           </h1>
           <p className="mt-1 text-sm text-[#64748b]">
-            Vendedores e entregadores
+            Central operacional para lojistas e entregadores
           </p>
         </div>
 
@@ -65,7 +68,9 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               type="email"
-              className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3.5 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#7c3aed]/30"
+              autoComplete="email"
+              required
+              className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3.5 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
             />
           </div>
 
@@ -78,7 +83,9 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type={showPass ? "text" : "password"}
-                className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3.5 pr-12 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#7c3aed]/30"
+                autoComplete="current-password"
+                required
+                className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3.5 pr-12 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
               />
               <button
                 type="button"
@@ -93,11 +100,22 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-2xl bg-gradient-to-r from-[#7c3aed] to-[#2563eb] py-4 text-sm font-black text-white shadow-lg shadow-[#7c3aed]/30 transition-transform active:scale-[0.98] disabled:opacity-60"
+            className="w-full rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-4 text-sm font-black text-white shadow-lg shadow-[#16a34a]/30 transition-transform active:scale-[0.98] disabled:opacity-60"
           >
-            {loading ? "Entrando..." : "Entrar no painel"}
+            {loading ? "Entrando..." : "Acessar Central Operacional"}
           </button>
         </form>
+
+        <div className="mt-6 text-center">
+          <a
+            href="https://brasux.com.br"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#64748b] hover:text-[#16a34a] transition-colors"
+          >
+            BrasUX Loja · Venda, organize e entregue em um único sistema →
+          </a>
+        </div>
       </div>
     </div>
   );

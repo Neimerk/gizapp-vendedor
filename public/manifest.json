@@ -1,0 +1,20 @@
+{
+  "name": "BrasUX Loja",
+  "short_name": "BrasUX Loja",
+  "description": "Central operacional para lojistas e entregadores parceiros. Venda, organize e entregue em um único sistema.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f0f2f7",
+  "theme_color": "#16a34a",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

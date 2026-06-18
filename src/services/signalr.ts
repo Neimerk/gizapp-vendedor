@@ -1,9 +1,10 @@
 import * as signalR from "@microsoft/signalr";
+import { AUTH_STORAGE_KEY } from "./auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5003";
 
 function getToken() {
-  const raw = localStorage.getItem("gizapp-seller-auth");
+  const raw = localStorage.getItem(AUTH_STORAGE_KEY);
 
   if (!raw) return "";
 
