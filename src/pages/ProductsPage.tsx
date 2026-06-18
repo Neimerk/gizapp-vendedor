@@ -1,4 +1,4 @@
-import { PackagePlus, Search, Trash2, X } from "lucide-react";
+import { PackagePlus, Search, Trash2, X, ImagePlus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -9,12 +9,12 @@ import {
   removeStoreProduct,
   updateStoreProduct,
   updateStoreProductImage,
-  uploadProductImage,
   type CatalogProduct,
   type StoreProduct,
 } from "../services/gizApi";
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
+import ImagePickerModal from "../components/ui/ImagePickerModal";
 
 type EditableField = "price" | "promotionalPrice" | "stock" | "available";
 type EditableValue = number | boolean | null;
@@ -34,7 +34,10 @@ export default function ProductsPage() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [addingProductId, setAddingProductId] = useState("");
-  const [uploadingImageId, setUploadingImageId] = useState("");
+
+  // Image picker modal
+  const [imagePickerProduct, setImagePickerProduct] = useState<StoreProduct | null>(null);
+  const [savingImageId, setSavingImageId] = useState("");
 
   async function loadProducts() {
     try {
@@ -123,20 +126,21 @@ export default function ProductsPage() {
     }
   }
 
-  async function handleUploadImage(productId: string, file: File) {
+  async function handleImageConfirmed(imageUrl: string) {
+    if (!imagePickerProduct) return;
+    const productId = imagePickerProduct.id;
+    setImagePickerProduct(null);
+    setSavingImageId(productId);
     try {
-      setUploadingImageId(productId);
-      const imageUrl = await uploadProductImage(file);
       await updateStoreProductImage(productId, imageUrl);
       setProducts((cur) =>
         cur.map((p) => (p.id === productId ? { ...p, imageUrl } : p))
       );
-      alert("Imagem enviada com sucesso.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Erro ao enviar imagem.");
+      alert(error instanceof Error ? error.message : "Erro ao salvar imagem.");
     } finally {
-      setUploadingImageId("");
+      setSavingImageId("");
     }
   }
 
@@ -243,19 +247,15 @@ export default function ProductsPage() {
                         onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
                       />
                     </div>
-                    <label className="cursor-pointer rounded-xl bg-[#0f172a] px-3 py-1.5 text-[10px] font-black text-white">
-                      {uploadingImageId === product.id ? "Enviando..." : "Imagem"}
-                      <input
-                        type="file"
-                        accept=".jpg,.jpeg,.png,.webp"
-                        className="hidden"
-                        disabled={uploadingImageId === product.id}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleUploadImage(product.id, file);
-                        }}
-                      />
-                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setImagePickerProduct(product)}
+                      disabled={savingImageId === product.id}
+                      className="flex items-center gap-1.5 rounded-xl bg-[#0f172a] px-3 py-1.5 text-[10px] font-black text-white disabled:opacity-60"
+                    >
+                      <ImagePlus size={12} />
+                      {savingImageId === product.id ? "Salvando…" : "Imagem"}
+                    </button>
                   </div>
 
                   {/* Info */}
@@ -362,6 +362,16 @@ export default function ProductsPage() {
             onPageChange={setPage}
           />
         </>
+      )}
+
+      {/* Image picker modal */}
+      {imagePickerProduct && (
+        <ImagePickerModal
+          productName={imagePickerProduct.name}
+          currentImageUrl={imagePickerProduct.imageUrl}
+          onConfirm={handleImageConfirmed}
+          onClose={() => setImagePickerProduct(null)}
+        />
       )}
 
       {/* Catalog modal */}

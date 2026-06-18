@@ -1,0 +1,605 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  Camera,
+  FolderOpen,
+  X,
+  Search,
+  CheckCircle2,
+  RefreshCw,
+  AlertCircle,
+  RotateCcw,
+  ArrowRight,
+  ImageIcon,
+} from "lucide-react";
+
+import {
+  getCatalogProducts,
+  uploadProductImage,
+  getProductImageUrl,
+  type CatalogProduct,
+} from "../../services/gizApi";
+import {
+  processToWebP,
+  fmtBytes,
+  savingPct,
+  type ProcessedImage,
+} from "../../services/imageProcessing";
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+type Tab = "upload" | "bank";
+
+type UploadState =
+  | { phase: "idle" }
+  | { phase: "processing" }
+  | { phase: "ready"; result: ProcessedImage }
+  | { phase: "uploading" }
+  | { phase: "error"; message: string };
+
+type Props = {
+  productName: string;
+  currentImageUrl?: string;
+  onConfirm: (imageUrl: string) => void;
+  onClose: () => void;
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function ImagePickerModal({
+  productName,
+  currentImageUrl,
+  onConfirm,
+  onClose,
+}: Props) {
+  const [tab, setTab] = useState<Tab>("upload");
+
+  // upload tab
+  const [upload, setUpload] = useState<UploadState>({ phase: "idle" });
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // bank tab
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<CatalogProduct | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const bankLoaded = useRef(false);
+
+  // Load catalog when bank tab first opens
+  useEffect(() => {
+    if (tab !== "bank") return;
+    if (bankLoaded.current) return;
+    bankLoaded.current = true;
+    loadCatalog("");
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "bank" || !bankLoaded.current) return;
+    const t = setTimeout(() => loadCatalog(search), 380);
+    return () => clearTimeout(t);
+  }, [search, tab]);
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (upload.phase === "ready") URL.revokeObjectURL(upload.result.previewUrl);
+    };
+  }, []);
+
+  async function loadCatalog(q: string) {
+    setCatalogLoading(true);
+    try {
+      const items = await getCatalogProducts(q);
+      setCatalog(items.filter((p) => p.imageUrl));
+    } catch {
+      /* silent */
+    } finally {
+      setCatalogLoading(false);
+    }
+  }
+
+  async function handleFileChosen(file: File) {
+    // Revoke previous preview if any
+    if (upload.phase === "ready") URL.revokeObjectURL(upload.result.previewUrl);
+    setUpload({ phase: "processing" });
+    try {
+      const result = await processToWebP(file);
+      setUpload({ phase: "ready", result });
+    } catch (e) {
+      setUpload({
+        phase: "error",
+        message: e instanceof Error ? e.message : "Erro ao processar imagem.",
+      });
+    }
+  }
+
+  async function handleConfirmUpload() {
+    if (upload.phase !== "ready") return;
+    const { result } = upload;
+    setUpload({ phase: "uploading" });
+    try {
+      const url = await uploadProductImage(result.file);
+      URL.revokeObjectURL(result.previewUrl);
+      onConfirm(url);
+    } catch (e) {
+      setUpload({
+        phase: "error",
+        message: e instanceof Error ? e.message : "Erro ao enviar imagem.",
+      });
+    }
+  }
+
+  async function handleConfirmBank() {
+    if (!selected?.imageUrl) return;
+    setConfirming(true);
+    try {
+      onConfirm(selected.imageUrl);
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  function resetUpload() {
+    if (upload.phase === "ready") URL.revokeObjectURL(upload.result.previewUrl);
+    setUpload({ phase: "idle" });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center p-0 sm:p-4">
+      <div className="flex max-h-[95dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl">
+        {/* Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] px-6 py-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-black text-[#0f172a]">Imagem do produto</h2>
+            <p className="mt-0.5 truncate text-xs text-[#64748b]">{productName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-4 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f1f5f9] text-[#64748b] transition-colors hover:bg-[#e2e8f0]"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex shrink-0 border-b border-[#e2e8f0] px-6">
+          {(
+            [
+              { key: "upload" as Tab, icon: Camera, label: "Câmera / Upload" },
+              { key: "bank" as Tab, icon: ImageIcon, label: "Banco de imagens" },
+            ]
+          ).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 border-b-2 px-4 py-3.5 text-sm font-black transition-colors ${
+                tab === t.key
+                  ? "border-[#16a34a] text-[#16a34a]"
+                  : "border-transparent text-[#94a3b8] hover:text-[#64748b]"
+              }`}
+            >
+              <t.icon size={15} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          {tab === "upload" ? (
+            <UploadTab
+              upload={upload}
+              cameraRef={cameraRef}
+              fileRef={fileRef}
+              currentImageUrl={currentImageUrl}
+              onFileChosen={handleFileChosen}
+              onReset={resetUpload}
+              onConfirm={handleConfirmUpload}
+            />
+          ) : (
+            <BankTab
+              catalog={catalog}
+              loading={catalogLoading}
+              search={search}
+              onSearch={(q) => { setSearch(q); setSelected(null); }}
+              selected={selected}
+              onSelect={setSelected}
+              confirming={confirming}
+              onConfirm={handleConfirmBank}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Upload tab ────────────────────────────────────────────────────────────────
+
+function UploadTab({
+  upload,
+  cameraRef,
+  fileRef,
+  currentImageUrl,
+  onFileChosen,
+  onReset,
+  onConfirm,
+}: {
+  upload: UploadState;
+  cameraRef: React.RefObject<HTMLInputElement | null>;
+  fileRef: React.RefObject<HTMLInputElement | null>;
+  currentImageUrl?: string;
+  onFileChosen: (f: File) => void;
+  onReset: () => void;
+  onConfirm: () => void;
+}) {
+  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (f) onFileChosen(f);
+    e.target.value = "";
+  }
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Hidden inputs */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleInput}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*, .heic, .heif"
+        className="hidden"
+        onChange={handleInput}
+      />
+
+      {/* Idle — action buttons */}
+      {upload.phase === "idle" && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => cameraRef.current?.click()}
+              className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#16a34a]/30 bg-[#f0fdf4] p-6 transition-colors hover:border-[#16a34a] hover:bg-[#dcfce7] active:scale-[0.98]"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#16a34a]">
+                <Camera size={26} className="text-white" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-black text-[#0f172a]">Tirar foto</p>
+                <p className="mt-0.5 text-[11px] text-[#64748b]">Abre a câmera do dispositivo</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-[#e2e8f0] bg-[#f8fafc] p-6 transition-colors hover:border-[#64748b] hover:bg-[#f1f5f9] active:scale-[0.98]"
+            >
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0f172a]">
+                <FolderOpen size={26} className="text-white" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-black text-[#0f172a]">Escolher arquivo</p>
+                <p className="mt-0.5 text-[11px] text-[#64748b]">JPG, PNG, WebP, HEIC…</p>
+              </div>
+            </button>
+          </div>
+
+          {/* Current image preview */}
+          {currentImageUrl && (
+            <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-3">
+              <img
+                src={getProductImageUrl(currentImageUrl)}
+                alt="Imagem atual"
+                className="h-14 w-14 rounded-xl object-cover"
+                onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+              />
+              <div>
+                <p className="text-xs font-black text-[#0f172a]">Imagem atual</p>
+                <p className="text-[11px] text-[#64748b]">Selecione acima para substituir</p>
+              </div>
+            </div>
+          )}
+
+          <ProcessingInfo />
+        </>
+      )}
+
+      {/* Processing */}
+      {upload.phase === "processing" && (
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f0fdf4]">
+            <RefreshCw size={28} className="animate-spin text-[#16a34a]" />
+          </div>
+          <div className="text-center">
+            <p className="font-black text-[#0f172a]">Processando imagem…</p>
+            <p className="mt-1 text-xs text-[#64748b]">Redimensionando e convertendo para WebP</p>
+          </div>
+        </div>
+      )}
+
+      {/* Ready — preview + stats */}
+      {upload.phase === "ready" && (
+        <ReadyPanel
+          result={upload.result}
+          onConfirm={onConfirm}
+          onReplace={() => fileRef.current?.click()}
+        />
+      )}
+
+      {/* Uploading */}
+      {upload.phase === "uploading" && (
+        <div className="flex flex-col items-center gap-4 py-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#16a34a]/10">
+            <RefreshCw size={28} className="animate-spin text-[#16a34a]" />
+          </div>
+          <div className="text-center">
+            <p className="font-black text-[#0f172a]">Enviando imagem…</p>
+            <p className="mt-1 text-xs text-[#64748b]">Aguarde, estamos salvando sua foto</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {upload.phase === "error" && (
+        <div className="flex flex-col items-center gap-4 py-10">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
+            <AlertCircle size={28} className="text-red-500" />
+          </div>
+          <div className="text-center">
+            <p className="font-black text-[#0f172a]">Algo deu errado</p>
+            <p className="mt-1 text-sm text-[#64748b]">{upload.message}</p>
+          </div>
+          <button
+            onClick={onReset}
+            className="flex items-center gap-2 rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-black text-white"
+          >
+            <RotateCcw size={14} />
+            Tentar novamente
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Ready panel (preview + stats) ─────────────────────────────────────────────
+
+function ReadyPanel({
+  result,
+  onConfirm,
+  onReplace,
+}: {
+  result: ProcessedImage;
+  onConfirm: () => void;
+  onReplace: () => void;
+}) {
+  const saving = savingPct(result.originalBytes, result.processedBytes);
+
+  return (
+    <div className="space-y-4">
+      {/* Preview */}
+      <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-[#f8fafc]">
+        <img
+          src={result.previewUrl}
+          alt="Prévia"
+          className="mx-auto block max-h-64 w-full object-contain"
+        />
+      </div>
+
+      {/* Stats */}
+      <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+        <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#94a3b8]">
+          Processamento
+        </p>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <StatCell label="Original" value={fmtBytes(result.originalBytes)} />
+          <div className="flex items-center justify-center">
+            <ArrowRight size={16} className="text-[#16a34a]" />
+          </div>
+          <StatCell
+            label="WebP final"
+            value={fmtBytes(result.processedBytes)}
+            accent
+          />
+        </div>
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f0fdf4] px-4 py-2.5">
+          <div className="flex items-center gap-1.5">
+            <CheckCircle2 size={14} className="text-[#16a34a]" />
+            <span className="text-xs font-black text-[#16a34a]">
+              {result.width} × {result.height} px · formato WebP
+            </span>
+          </div>
+          {saving > 0 && (
+            <span className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-black text-white">
+              -{saving}% menor
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <button
+          onClick={onReplace}
+          className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
+        >
+          <RotateCcw size={14} />
+          Trocar
+        </button>
+        <button
+          onClick={onConfirm}
+          className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 transition-transform active:scale-[0.98]"
+        >
+          <CheckCircle2 size={16} />
+          Usar esta imagem
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</p>
+      <p className={`mt-0.5 text-sm font-black ${accent ? "text-[#16a34a]" : "text-[#0f172a]"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ProcessingInfo() {
+  return (
+    <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
+      <p className="text-[11px] font-bold text-[#64748b]">
+        🔧 <span className="font-black text-[#0f172a]">Processamento automático:</span>{" "}
+        todas as imagens são redimensionadas para no máximo 1200×1200 px e
+        convertidas para WebP antes de serem salvas, garantindo carregamento
+        rápido na loja.
+      </p>
+    </div>
+  );
+}
+
+// ── Bank tab ──────────────────────────────────────────────────────────────────
+
+function BankTab({
+  catalog,
+  loading,
+  search,
+  onSearch,
+  selected,
+  onSelect,
+  confirming,
+  onConfirm,
+}: {
+  catalog: CatalogProduct[];
+  loading: boolean;
+  search: string;
+  onSearch: (q: string) => void;
+  selected: CatalogProduct | null;
+  onSelect: (p: CatalogProduct) => void;
+  confirming: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-0">
+      {/* Search */}
+      <div className="sticky top-0 z-10 border-b border-[#e2e8f0] bg-white px-6 py-3">
+        <div className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
+          <Search size={14} className="shrink-0 text-[#94a3b8]" />
+          <input
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Buscar no banco de imagens…"
+            className="w-full bg-transparent text-sm font-semibold text-[#0f172a] outline-none placeholder:text-[#cbd5e1]"
+          />
+          {search && (
+            <button onClick={() => onSearch("")} className="shrink-0 text-[#94a3b8]">
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Selected preview + confirm */}
+      {selected && (
+        <div className="border-b border-[#e2e8f0] bg-[#f0fdf4] px-6 py-4">
+          <div className="flex items-center gap-4">
+            <img
+              src={getProductImageUrl(selected.imageUrl)}
+              alt={selected.name}
+              className="h-16 w-16 rounded-xl object-cover"
+              onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="font-black text-[#0f172a] line-clamp-1">{selected.name}</p>
+              <p className="text-xs text-[#64748b]">{selected.category}</p>
+            </div>
+            <button
+              onClick={onConfirm}
+              disabled={confirming}
+              className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-4 py-2.5 text-sm font-black text-white shadow-md shadow-[#16a34a]/25 disabled:opacity-60"
+            >
+              {confirming ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : (
+                <CheckCircle2 size={14} />
+              )}
+              Usar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div className="p-4">
+        {loading ? (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="aspect-square animate-pulse rounded-2xl bg-[#f1f5f9]" />
+            ))}
+          </div>
+        ) : catalog.length === 0 ? (
+          <div className="py-12 text-center">
+            <ImageIcon size={32} className="mx-auto mb-3 text-[#cbd5e1]" />
+            <p className="font-black text-[#64748b]">Nenhuma imagem encontrada</p>
+            <p className="mt-1 text-xs text-[#94a3b8]">Tente outro termo de busca</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {catalog.map((product) => {
+              const isSelected = selected?.id === product.id;
+              return (
+                <button
+                  key={product.id}
+                  onClick={() => onSelect(product)}
+                  className={`group relative aspect-square overflow-hidden rounded-2xl border-2 transition-all ${
+                    isSelected
+                      ? "border-[#16a34a] shadow-md shadow-[#16a34a]/20"
+                      : "border-transparent hover:border-[#16a34a]/40"
+                  }`}
+                >
+                  <img
+                    src={getProductImageUrl(product.imageUrl)}
+                    alt={product.name}
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                    onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                    loading="lazy"
+                  />
+                  {/* Overlay on hover */}
+                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100">
+                    <p className="w-full p-2 text-[10px] font-black text-white line-clamp-2 leading-tight">
+                      {product.name}
+                    </p>
+                  </div>
+                  {/* Selected checkmark */}
+                  {isSelected && (
+                    <div className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#16a34a] shadow">
+                      <CheckCircle2 size={14} className="text-white" />
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
