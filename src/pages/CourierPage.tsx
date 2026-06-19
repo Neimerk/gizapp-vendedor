@@ -194,8 +194,9 @@ export default function CourierPage() {
   // Broadcast courier location to all active deliveries via SignalR
   useEffect(() => {
     if (!courierCoords || active.length === 0) return;
+    const [lat, lng] = courierCoords;
     active.forEach((order) => {
-      sendCourierLocation(order.id, courierCoords.lat, courierCoords.lng).catch(() => {});
+      sendCourierLocation(order.id, lat, lng).catch(() => {});
     });
   }, [courierCoords, active]);
   const history = useMemo(
