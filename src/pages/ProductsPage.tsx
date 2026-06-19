@@ -9,6 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Tag,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -74,6 +75,7 @@ export default function ProductsPage() {
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogSetup, setCatalogSetup] = useState<CatalogSetup | null>(null);
   const [addingId, setAddingId] = useState("");
 
@@ -92,13 +94,15 @@ export default function ProductsPage() {
   }
 
   async function loadCatalog(s = "") {
+    setCatalogLoading(true);
+    setCatalogError(null);
     try {
-      setCatalogLoading(true);
       const data = await getCatalogProducts(s);
       setCatalogProducts(data);
     } catch (e) {
       console.error(e);
-      alert("Erro ao carregar catálogo.");
+      setCatalogError("Catálogo indisponível no momento. Use a aba URL ou upload de imagem.");
+      setCatalogProducts([]);
     } finally {
       setCatalogLoading(false);
     }
@@ -439,6 +443,8 @@ export default function ProductsPage() {
             <CatalogModal
               products={catItems}
               loading={catalogLoading}
+              error={catalogError}
+              onRetry={() => loadCatalog(catalogSearch)}
               search={catalogSearch}
               onSearch={q => { setCatalogSearch(q); setCatPage(1); }}
               page={catPage}
@@ -447,7 +453,7 @@ export default function ProductsPage() {
               onPageChange={setCatPage}
               storeProductIds={new Set(products.map(p => p.productId))}
               onSelect={openSetup}
-              onClose={() => { setCatalogOpen(false); setCatalogSearch(""); }}
+              onClose={() => { setCatalogOpen(false); setCatalogSearch(""); setCatalogError(null); }}
             />
           )}
         </div>
@@ -833,6 +839,8 @@ function SetupModal({
 function CatalogModal({
   products,
   loading,
+  error,
+  onRetry,
   search,
   onSearch,
   page,
@@ -845,6 +853,8 @@ function CatalogModal({
 }: {
   products: CatalogProduct[];
   loading: boolean;
+  error: string | null;
+  onRetry: () => void;
   search: string;
   onSearch: (q: string) => void;
   page: number;
@@ -891,6 +901,22 @@ function CatalogModal({
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="h-28 animate-pulse rounded-2xl bg-[#f8fafc]" />
             ))}
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50">
+              <AlertCircle size={28} className="text-amber-500" />
+            </div>
+            <div>
+              <p className="font-black text-[#0f172a]">Catálogo temporariamente indisponível</p>
+              <p className="mt-1 text-sm text-[#64748b]">{error}</p>
+            </div>
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-black text-[#0f172a] hover:bg-[#f8fafc]"
+            >
+              <RefreshCw size={14} /> Tentar novamente
+            </button>
           </div>
         ) : products.length === 0 ? (
           <div className="py-12 text-center font-bold text-[#64748b]">Nenhum produto encontrado.</div>
