@@ -26,7 +26,7 @@ import {
   getProductImageUrl,
   type Order,
 } from "../services/gizApi";
-import { ordersConnection, startOrdersConnection } from "../services/signalr";
+import { ordersConnection, startOrdersConnection, sendCourierLocation } from "../services/signalr";
 import { getAuth } from "../services/auth";
 import { useGeolocation } from "../hooks/useGeolocation";
 import DeliveryMap from "../components/map/DeliveryMap";
@@ -103,6 +103,7 @@ export default function CourierPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [accepting, setAccepting] = useState<string | null>(null);
   const [delivering, setDelivering] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   async function load(silent = false) {
     if (!silent) setLoading(true);
@@ -168,7 +169,7 @@ export default function CourierPage() {
       setMine((cur) => [updated, ...cur]);
       setTab("active");
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao aceitar entrega.");
+      setActionError(e instanceof Error ? e.message : "Erro ao aceitar entrega.");
     } finally {
       setAccepting(null);
     }
@@ -182,13 +183,21 @@ export default function CourierPage() {
         cur.map((o) => (o.id === orderId ? { ...o, status: 4 } : o))
       );
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao confirmar entrega.");
+      setActionError(e instanceof Error ? e.message : "Erro ao confirmar entrega.");
     } finally {
       setDelivering(null);
     }
   }
 
   const active = useMemo(() => mine.filter((o) => o.status === 3), [mine]);
+
+  // Broadcast courier location to all active deliveries via SignalR
+  useEffect(() => {
+    if (!courierCoords || active.length === 0) return;
+    active.forEach((order) => {
+      sendCourierLocation(order.id, courierCoords.lat, courierCoords.lng).catch(() => {});
+    });
+  }, [courierCoords, active]);
   const history = useMemo(
     () => mine.filter((o) => o.status === 4 || o.status === 5),
     [mine]
@@ -253,6 +262,15 @@ export default function CourierPage() {
           </button>
         </div>
       </div>
+
+      {/* Action error */}
+      {actionError && (
+        <div className="mb-2 flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+          <span className="mt-0.5 shrink-0 text-red-500">⚠</span>
+          <p className="flex-1 text-sm font-semibold text-red-700">{actionError}</p>
+          <button onClick={() => setActionError(null)} className="shrink-0 text-red-400 hover:text-red-600">×</button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="mb-6 grid grid-cols-3 gap-3">

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { loginSeller } from "../services/gizApi";
@@ -11,23 +11,24 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    setError(null);
     try {
       setLoading(true);
       const auth = await loginSeller({ email, password });
       const allowed = ["Seller", "Admin", "Courier"];
       if (!allowed.includes(auth.role)) {
-        alert("Acesso exclusivo para lojistas e entregadores parceiros.");
+        setError("Acesso exclusivo para lojistas e entregadores parceiros.");
         return;
       }
       saveAuth(auth);
       const saved = getAuth();
       navigate(saved?.role === "Courier" && !saved?.storeId ? "/entregas" : "/");
-    } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Erro ao entrar.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao entrar.");
     } finally {
       setLoading(false);
     }
@@ -96,6 +97,13 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          {error && (
+            <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+              <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+              <p className="text-sm font-semibold text-red-700">{error}</p>
+            </div>
+          )}
 
           <button
             type="submit"

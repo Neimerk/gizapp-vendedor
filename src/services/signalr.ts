@@ -27,3 +27,8 @@ export async function startOrdersConnection() {
     await ordersConnection.start();
   }
 }
+
+export async function sendCourierLocation(orderId: string, lat: number, lng: number) {
+  if (ordersConnection.state !== signalR.HubConnectionState.Connected) return;
+  await ordersConnection.invoke("UpdateCourierLocation", { orderId, lat, lng });
+}

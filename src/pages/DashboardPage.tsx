@@ -8,14 +8,17 @@ import {
   CheckCircle,
   XCircle,
   Truck,
+  Store as StoreIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 
 import {
   getOrders,
+  getStoreById,
   getStoreProducts,
   type Order,
+  type Store,
   type StoreProduct,
 } from "../services/gizApi";
 import { getAuth } from "../services/auth";
@@ -43,6 +46,7 @@ export default function DashboardPage() {
   const auth = getAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<StoreProduct[]>([]);
+  const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
 
   const canSell = auth?.role === "Seller" || auth?.role === "Admin" || (auth?.role === "Courier" && !!auth?.storeId);
@@ -53,9 +57,14 @@ export default function DashboardPage() {
   useEffect(() => {
     async function load() {
       try {
-        const [o, p] = await Promise.all([getOrders(), getStoreProducts()]);
+        const [o, p, s] = await Promise.all([
+          getOrders(),
+          getStoreProducts(),
+          auth?.storeId ? getStoreById(auth.storeId) : Promise.resolve(null),
+        ]);
         setOrders(o);
         setProducts(p);
+        setStore(s);
       } catch (e) {
         console.error(e);
       } finally {
@@ -97,9 +106,25 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Central Operacional</p>
-        <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Dashboard</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Central Operacional</p>
+          <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Dashboard</h1>
+        </div>
+        {store && (
+          <Link
+            to="/loja"
+            className={`flex shrink-0 items-center gap-2 rounded-2xl border px-4 py-2.5 text-sm font-black transition-colors ${
+              store.isOpen
+                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                : "border-[#e2e8f0] bg-[#f8fafc] text-[#64748b] hover:bg-[#f1f5f9]"
+            }`}
+          >
+            <StoreIcon size={15} />
+            {store.isOpen ? "Loja aberta" : "Loja fechada"}
+            <span className={`h-2 w-2 rounded-full ${store.isOpen ? "bg-green-500" : "bg-[#94a3b8]"}`} />
+          </Link>
+        )}
       </div>
 
       {/* Stats grid — 2 cols base, 4 em xl */}

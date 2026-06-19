@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Store as StoreIcon } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, MapPin, Store as StoreIcon } from "lucide-react";
 
 import {
   getStoreById,
@@ -18,6 +18,8 @@ export default function StoreSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [cepLoading, setCepLoading] = useState(false);
 
   // selected product-type slugs (persisted in store.category as "slug1,slug2,…")
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -48,8 +50,33 @@ export default function StoreSettingsPage() {
     );
   }
 
+  async function handleCepLookup(cep: string) {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8 || !store) return;
+    setCepLoading(true);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+      const data = await res.json();
+      if (!data.erro) {
+        setStore({
+          ...store,
+          zipCode: cep,
+          address: data.logradouro || store.address || "",
+          neighborhood: data.bairro || store.neighborhood || "",
+          city: data.localidade || store.city || "",
+          state: data.uf || store.state || "",
+        });
+      }
+    } catch {
+      // ignore CEP lookup errors
+    } finally {
+      setCepLoading(false);
+    }
+  }
+
   async function handleSave() {
     if (!store) return;
+    setSaveError(null);
     try {
       setSaving(true);
       const updated = { ...store, category: selectedTypes.join(",") };
@@ -58,8 +85,7 @@ export default function StoreSettingsPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (error) {
-      console.error(error);
-      alert(error instanceof Error ? error.message : "Erro ao atualizar loja.");
+      setSaveError(error instanceof Error ? error.message : "Erro ao atualizar loja.");
     } finally {
       setSaving(false);
     }
@@ -197,6 +223,114 @@ export default function StoreSettingsPage() {
         </div>
       </div>
 
+      {/* Address */}
+      <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#2563eb]/10">
+            <MapPin size={16} className="text-[#2563eb]" />
+          </div>
+          <h2 className="text-base font-black text-[#0f172a]">Endereço da loja</h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              CEP
+            </label>
+            <div className="relative">
+              <input
+                value={store.zipCode ?? ""}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2").slice(0, 9);
+                  setStore({ ...store, zipCode: v });
+                  if (v.replace(/\D/g, "").length === 8) handleCepLookup(v);
+                }}
+                className={`${inputCls} ${cepLoading ? "pr-10" : ""}`}
+                placeholder="00000-000"
+                inputMode="numeric"
+              />
+              {cepLoading && (
+                <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[#94a3b8]" />
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Rua / Avenida
+            </label>
+            <input
+              value={store.address ?? ""}
+              onChange={(e) => setStore({ ...store, address: e.target.value })}
+              className={inputCls}
+              placeholder="Nome da rua"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                Número
+              </label>
+              <input
+                value={(store as Store & { number?: string }).number ?? ""}
+                onChange={(e) => setStore({ ...store, number: e.target.value } as Store & { number?: string })}
+                className={inputCls}
+                placeholder="123"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                Complemento
+              </label>
+              <input
+                value={(store as Store & { complement?: string }).complement ?? ""}
+                onChange={(e) => setStore({ ...store, complement: e.target.value } as Store & { complement?: string })}
+                className={inputCls}
+                placeholder="Sala, bloco…"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Bairro
+            </label>
+            <input
+              value={store.neighborhood ?? ""}
+              onChange={(e) => setStore({ ...store, neighborhood: e.target.value })}
+              className={inputCls}
+              placeholder="Nome do bairro"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Cidade
+            </label>
+            <input
+              value={store.city ?? ""}
+              onChange={(e) => setStore({ ...store, city: e.target.value })}
+              className={inputCls}
+              placeholder="Sua cidade"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Estado (UF)
+            </label>
+            <input
+              value={store.state ?? ""}
+              onChange={(e) => setStore({ ...store, state: e.target.value.toUpperCase().slice(0, 2) })}
+              className={inputCls}
+              placeholder="SP"
+              maxLength={2}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Product types multi-select */}
       <div className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="mb-2 flex items-start justify-between">
@@ -283,6 +417,13 @@ export default function StoreSettingsPage() {
       >
         {saving ? "Salvando…" : saved ? "✓ Salvo com sucesso!" : "Salvar alterações"}
       </button>
+
+      {saveError && (
+        <div className="flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
+          <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
+          <p className="text-sm font-semibold text-red-700">{saveError}</p>
+        </div>
+      )}
     </div>
   );
 }

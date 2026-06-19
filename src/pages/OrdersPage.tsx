@@ -81,7 +81,8 @@ export default function OrdersPage() {
       requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "instant" }));
     } catch (error) {
       console.error(error);
-      alert("Erro ao atualizar pedido.");
+      setToastMessage(error instanceof Error ? error.message : "Erro ao atualizar pedido.");
+      setToastVisible(true);
     } finally {
       setUpdatingId("");
     }
