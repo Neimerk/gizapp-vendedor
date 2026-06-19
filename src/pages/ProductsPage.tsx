@@ -67,6 +67,7 @@ export default function ProductsPage() {
 
   const [clearing, setClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showUnavailable, setShowUnavailable] = useState(false);
 
   // Catalog modal
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -80,7 +81,9 @@ export default function ProductsPage() {
     try {
       setLoading(true);
       const data = await getStoreProducts();
-      setProducts(data.map(toLocal));
+      // Só carrega produtos que o lojista EXPLICITAMENTE ativou
+      // Produtos pré-carregados do catálogo ficam com available=false e são ignorados
+      setProducts(data.filter(p => p.available).map(toLocal));
     } catch (e) {
       console.error(e);
     } finally {
@@ -171,14 +174,9 @@ export default function ProductsPage() {
     if (!deleteTarget) return;
     try {
       setDeleting(true);
-      const result = await removeStoreProduct(deleteTarget.id);
-      if (result.softDeleted) {
-        setProducts(cur =>
-          cur.map(p => p.id === deleteTarget.id ? { ...p, available: false } : p)
-        );
-      } else {
-        setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
-      }
+      await removeStoreProduct(deleteTarget.id);
+      // Soft ou hard delete: remove sempre da lista visível (só mostramos available=true)
+      setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
@@ -239,15 +237,19 @@ export default function ProductsPage() {
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
+  // Produtos inativos que o lojista desativou (não os pré-seeded, que nunca entram no state)
+  const unavailableCount = products.filter(p => !p.available).length;
+
   const filtered = useMemo(() => {
+    const base = showUnavailable ? products : products.filter(p => p.available);
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter(p =>
+    if (!q) return base;
+    return base.filter(p =>
       p.name.toLowerCase().includes(q) ||
       p.category.toLowerCase().includes(q) ||
       (p.brand ?? "").toLowerCase().includes(q)
     );
-  }, [products, search]);
+  }, [products, search, showUnavailable]);
 
   const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE);
 
@@ -270,15 +272,26 @@ export default function ProductsPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Operação Comercial</p>
           <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Produtos</h1>
-          <p className="mt-1 text-sm text-[#64748b]">
-            {products.length} produto{products.length !== 1 ? "s" : ""} na loja
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-[#64748b]">
+              {products.filter(p => p.available).length} ativo{products.filter(p => p.available).length !== 1 ? "s" : ""} na loja
+            </span>
+            {unavailableCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowUnavailable(v => !v)}
+                className="text-xs font-bold text-[#94a3b8] underline underline-offset-2 hover:text-[#64748b]"
+              >
+                {showUnavailable ? "Ocultar" : `+ ${unavailableCount} inativo${unavailableCount !== 1 ? "s" : ""}`}
+              </button>
+            )}
             {modifiedCount > 0 && (
-              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-600 ring-1 ring-amber-200">
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-600 ring-1 ring-amber-200">
                 <AlertCircle size={10} />
                 {modifiedCount} não salvo{modifiedCount !== 1 ? "s" : ""}
               </span>
             )}
-          </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {products.length > 0 && (
