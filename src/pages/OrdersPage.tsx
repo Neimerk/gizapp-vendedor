@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ReceiptText } from "lucide-react";
 
 import OrderToast from "../components/ui/OrderToast";
 import Pagination from "../components/ui/Pagination";
@@ -17,21 +17,27 @@ const STATUS_LABEL: Record<number, string> = {
   5: "Cancelado",
 };
 
-const STATUS_CLS: Record<number, string> = {
-  0: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  1: "bg-purple-100 text-purple-700 border-purple-200",
-  2: "bg-blue-100 text-blue-700 border-blue-200",
-  3: "bg-orange-100 text-orange-700 border-orange-200",
-  4: "bg-green-100 text-green-700 border-green-200",
-  5: "bg-red-100 text-red-700 border-red-200",
+const STATUS_CLS_BAR: Record<number, string> = {
+  0: "#f59e0b", 1: "#8b5cf6", 2: "#3b82f6", 3: "#f97316", 4: "#16a34a", 5: "#ef4444",
+};
+const STATUS_CLS_BG: Record<number, string> = {
+  0: "rgba(245,158,11,0.12)", 1: "rgba(139,92,246,0.12)", 2: "rgba(59,130,246,0.12)",
+  3: "rgba(249,115,22,0.12)", 4: "rgba(22,163,74,0.12)",  5: "rgba(239,68,68,0.12)",
+};
+const STATUS_CLS_COLOR: Record<number, string> = {
+  0: "#fbbf24", 1: "#a78bfa", 2: "#60a5fa", 3: "#fb923c", 4: "#4ade80", 5: "#f87171",
+};
+const STATUS_CLS_BORDER: Record<number, string> = {
+  0: "rgba(245,158,11,0.25)", 1: "rgba(139,92,246,0.25)", 2: "rgba(59,130,246,0.25)",
+  3: "rgba(249,115,22,0.25)", 4: "rgba(22,163,74,0.25)",  5: "rgba(239,68,68,0.25)",
 };
 
 const FILTERS = [
-  { label: "Todos", value: "all" },
-  { label: "Pendentes", value: "pending" },
-  { label: "Em andamento", value: "active" },
-  { label: "Entregues", value: "done" },
-  { label: "Cancelados", value: "cancelled" },
+  { label: "Todos",        value: "all"       },
+  { label: "Pendentes",    value: "pending"   },
+  { label: "Em andamento", value: "active"    },
+  { label: "Entregues",    value: "done"      },
+  { label: "Cancelados",   value: "cancelled" },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]["value"];
@@ -41,10 +47,10 @@ function formatMoney(v: number) {
 }
 
 function getNextAction(status: number) {
-  if (status === 0) return { label: "Aceitar", value: 1 };
-  if (status === 1) return { label: "Preparar", value: 2 };
+  if (status === 0) return { label: "Aceitar",           value: 1 };
+  if (status === 1) return { label: "Preparar",          value: 2 };
   if (status === 2) return { label: "Saiu para entrega", value: 3 };
-  if (status === 3) return { label: "Entregar", value: 4 };
+  if (status === 3) return { label: "Entregar",          value: 4 };
   return null;
 }
 
@@ -53,6 +59,7 @@ const PAGE_SIZE = 10;
 export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [toastVisible, setToastVisible] = useState(false);
@@ -61,12 +68,14 @@ export default function OrdersPage() {
   async function loadOrders(showLoading = true) {
     try {
       if (showLoading) setLoading(true);
+      else setRefreshing(true);
       const data = await getOrders();
       setOrders(data);
     } catch (error) {
       console.error(error);
     } finally {
       if (showLoading) setLoading(false);
+      else setRefreshing(false);
     }
   }
 
@@ -75,9 +84,7 @@ export default function OrdersPage() {
     try {
       setUpdatingId(orderId);
       await updateOrderStatus(orderId, status);
-      setOrders((cur) =>
-        cur.map((o) => (o.id === orderId ? { ...o, status } : o))
-      );
+      setOrders((cur) => cur.map((o) => (o.id === orderId ? { ...o, status } : o)));
       requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "instant" }));
     } catch (error) {
       console.error(error);
@@ -107,9 +114,7 @@ export default function OrdersPage() {
         });
 
         ordersConnection.on("OrderStatusUpdated", (updated: Order) => {
-          setOrders((cur) =>
-            cur.map((o) => (o.id === updated.id ? updated : o))
-          );
+          setOrders((cur) => cur.map((o) => (o.id === updated.id ? updated : o)));
         });
       } catch (error) {
         console.error("SignalR:", error);
@@ -124,23 +129,26 @@ export default function OrdersPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return orders;
-    if (filter === "pending") return orders.filter((o) => o.status === 0);
-    if (filter === "active") return orders.filter((o) => [1, 2, 3].includes(o.status));
-    if (filter === "done") return orders.filter((o) => o.status === 4);
+    if (filter === "all")       return orders;
+    if (filter === "pending")   return orders.filter((o) => o.status === 0);
+    if (filter === "active")    return orders.filter((o) => [1, 2, 3].includes(o.status));
+    if (filter === "done")      return orders.filter((o) => o.status === 4);
     if (filter === "cancelled") return orders.filter((o) => o.status === 5);
     return orders;
   }, [orders, filter]);
 
   const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE);
 
-  const counts = useMemo(() => ({
-    all: orders.length,
-    pending: orders.filter((o) => o.status === 0).length,
-    active: orders.filter((o) => [1, 2, 3].includes(o.status)).length,
-    done: orders.filter((o) => o.status === 4).length,
-    cancelled: orders.filter((o) => o.status === 5).length,
-  }), [orders]);
+  const counts = useMemo(
+    () => ({
+      all:       orders.length,
+      pending:   orders.filter((o) => o.status === 0).length,
+      active:    orders.filter((o) => [1, 2, 3].includes(o.status)).length,
+      done:      orders.filter((o) => o.status === 4).length,
+      cancelled: orders.filter((o) => o.status === 5).length,
+    }),
+    [orders]
+  );
 
   return (
     <div>
@@ -154,16 +162,20 @@ export default function OrdersPage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-[#0f172a]">Pedidos</h1>
-          <p className="mt-1 text-sm text-[#64748b]">
+          <p className="text-[11px] font-black uppercase tracking-[0.15em] text-[#16a34a]">
+            Operação Comercial
+          </p>
+          <h1 className="mt-1 text-2xl font-black text-white">Pedidos</h1>
+          <p className="mt-0.5 text-sm text-white/30">
             {orders.length} pedido{orders.length !== 1 ? "s" : ""} no total
           </p>
         </div>
         <button
           onClick={() => loadOrders(false)}
-          className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-black text-[#64748b] shadow-sm hover:bg-[#f8fafc]"
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white/60 transition-colors hover:text-white"
+          style={{ border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)" }}
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
           Atualizar
         </button>
       </div>
@@ -174,17 +186,29 @@ export default function OrdersPage() {
           <button
             key={f.value}
             onClick={() => { setFilter(f.value); setPage(1); }}
-            className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black transition-colors ${
+            className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all"
+            style={
               filter === f.value
-                ? "bg-[#16a34a] text-white shadow-sm shadow-[#16a34a]/30"
-                : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
-            }`}
+                ? {
+                    background: "linear-gradient(135deg, rgba(22,163,74,0.2), rgba(22,163,74,0.08))",
+                    border: "1px solid rgba(22,163,74,0.3)",
+                    color: "#4ade80",
+                  }
+                : {
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                    color: "#64748b",
+                  }
+            }
           >
             {f.label}
             <span
-              className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
-                filter === f.value ? "bg-white/20 text-white" : "bg-[#f1f5f9] text-[#94a3b8]"
-              }`}
+              className="rounded-lg px-1.5 py-0.5 text-[10px] font-black"
+              style={
+                filter === f.value
+                  ? { background: "rgba(74,222,128,0.15)", color: "#4ade80" }
+                  : { background: "rgba(255,255,255,0.06)", color: "#475569" }
+              }
             >
               {counts[f.value]}
             </span>
@@ -195,12 +219,30 @@ export default function OrdersPage() {
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-48 animate-pulse rounded-3xl bg-white shadow-sm" />
+            <div
+              key={i}
+              className="h-48 rounded-2xl animate-pulse"
+              style={{ background: "rgba(255,255,255,0.04)" }}
+            />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-3xl border border-[#e8eaf0] bg-white p-12 text-center font-black text-[#64748b]">
-          Nenhum pedido encontrado.
+        <div
+          className="flex flex-col items-center gap-4 rounded-2xl py-20 text-center"
+          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+        >
+          <div
+            className="flex h-16 w-16 items-center justify-center rounded-2xl"
+            style={{ background: "rgba(255,255,255,0.05)" }}
+          >
+            <ReceiptText size={28} className="text-white/20" />
+          </div>
+          <div>
+            <p className="font-black text-white/40">Nenhum pedido encontrado</p>
+            <p className="mt-1 text-sm text-white/20">
+              Tente outro filtro ou aguarde novos pedidos.
+            </p>
+          </div>
         </div>
       ) : (
         <>
@@ -212,21 +254,37 @@ export default function OrdersPage() {
               return (
                 <div
                   key={order.id}
-                  className="overflow-hidden rounded-3xl border border-[#e8eaf0] bg-white shadow-sm"
+                  className="overflow-hidden rounded-2xl transition-all hover:-translate-y-px"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                  }}
                 >
-                  {/* Order top bar */}
-                  <div className="flex items-center justify-between gap-3 border-b border-[#f1f5f9] px-5 py-4">
+                  {/* Accent bar */}
+                  <div
+                    className="h-0.5 w-full"
+                    style={{ background: STATUS_CLS_BAR[order.status] ?? "#334155" }}
+                  />
+
+                  {/* Header */}
+                  <div
+                    className="flex items-center justify-between gap-3 px-5 py-4"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+                  >
                     <div>
-                      <h2 className="font-black text-[#0f172a]">{order.customerName}</h2>
-                      <p className="text-xs text-[#94a3b8]">
+                      <h2 className="font-black text-white">{order.customerName}</h2>
+                      <p className="text-xs text-white/30">
                         {new Date(order.createdAt).toLocaleString("pt-BR")} ·{" "}
                         {order.paymentMethod}
                       </p>
                     </div>
                     <span
-                      className={`shrink-0 rounded-full border px-3 py-1 text-xs font-black ${
-                        STATUS_CLS[order.status] ?? "bg-[#f1f5f9] text-[#64748b]"
-                      }`}
+                      className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-black"
+                      style={{
+                        background: STATUS_CLS_BG[order.status],
+                        color: STATUS_CLS_COLOR[order.status],
+                        border: `1px solid ${STATUS_CLS_BORDER[order.status]}`,
+                      }}
                     >
                       {STATUS_LABEL[order.status]}
                     </span>
@@ -234,8 +292,8 @@ export default function OrdersPage() {
 
                   <div className="px-5 py-4">
                     {/* Address */}
-                    <p className="mb-3 text-sm text-[#64748b]">
-                      {order.deliveryAddress}, {order.deliveryNumber}
+                    <p className="mb-4 text-sm text-white/40">
+                      📍 {order.deliveryAddress}, {order.deliveryNumber}
                       {order.deliveryComplement ? ` — ${order.deliveryComplement}` : ""}
                       {order.deliveryNeighborhood ? ` · ${order.deliveryNeighborhood}` : ""}
                     </p>
@@ -245,51 +303,80 @@ export default function OrdersPage() {
                       {order.items.map((item) => (
                         <div
                           key={item.id}
-                          className="flex items-center justify-between rounded-xl bg-[#f8fafc] px-4 py-2.5"
+                          className="flex items-center justify-between rounded-xl px-4 py-2.5"
+                          style={{ background: "rgba(255,255,255,0.04)" }}
                         >
-                          <p className="text-sm font-black text-[#0f172a]">
+                          <p className="text-sm font-semibold text-white/80">
                             {item.quantity}× {item.productName}
                           </p>
-                          <p className="text-sm font-black text-[#16a34a]">
+                          <p className="text-sm font-black text-[#4ade80]">
                             {formatMoney(item.totalPrice)}
                           </p>
                         </div>
                       ))}
                     </div>
 
-                    {/* Totals */}
-                    <div className="mt-4 flex items-center justify-between border-t border-[#f1f5f9] pt-4">
-                      <div className="space-y-0.5 text-xs text-[#94a3b8]">
-                        <p>Subtotal: <strong>{formatMoney(order.subtotal)}</strong></p>
-                        <p>Entrega: <strong>{formatMoney(order.deliveryFee)}</strong></p>
+                    {/* Totals + Actions */}
+                    <div
+                      className="mt-4 flex items-center justify-between gap-4"
+                      style={{
+                        borderTop: "1px solid rgba(255,255,255,0.05)",
+                        paddingTop: "1rem",
+                      }}
+                    >
+                      <div className="space-y-0.5 text-xs text-white/30">
+                        <p>
+                          Subtotal:{" "}
+                          <span className="font-semibold text-white/60">
+                            {formatMoney(order.subtotal)}
+                          </span>
+                        </p>
+                        <p>
+                          Entrega:{" "}
+                          <span className="font-semibold text-white/60">
+                            {formatMoney(order.deliveryFee)}
+                          </span>
+                        </p>
                       </div>
-                      <div className="rounded-2xl bg-[#0f172a] px-4 py-2 text-right">
-                        <p className="text-[10px] font-bold text-white/50">Total</p>
-                        <p className="text-lg font-black text-white">{formatMoney(order.total)}</p>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    {!isFinished && (
-                      <div className="mt-4 flex justify-end gap-2">
-                        <button
-                          onClick={() => handleStatus(order.id, 5)}
-                          disabled={updatingId === order.id}
-                          className="rounded-xl bg-red-500 px-4 py-2 text-sm font-black text-white disabled:opacity-60"
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="rounded-xl px-4 py-2 text-right"
+                          style={{ background: "rgba(255,255,255,0.06)" }}
                         >
-                          Cancelar
-                        </button>
-                        {nextAction && (
-                          <button
-                            onClick={() => handleStatus(order.id, nextAction.value)}
-                            disabled={updatingId === order.id}
-                            className="rounded-xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-4 py-2 text-sm font-black text-white disabled:opacity-60"
-                          >
-                            {updatingId === order.id ? "Atualizando..." : nextAction.label}
-                          </button>
+                          <p className="text-[9px] font-bold uppercase tracking-widest text-white/30">
+                            Total
+                          </p>
+                          <p className="text-lg font-black text-white">
+                            {formatMoney(order.total)}
+                          </p>
+                        </div>
+                        {!isFinished && (
+                          <>
+                            <button
+                              onClick={() => handleStatus(order.id, 5)}
+                              disabled={updatingId === order.id}
+                              className="rounded-xl px-3 py-2 text-sm font-black text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-40"
+                              style={{ border: "1px solid rgba(239,68,68,0.2)" }}
+                            >
+                              Cancelar
+                            </button>
+                            {nextAction && (
+                              <button
+                                onClick={() => handleStatus(order.id, nextAction.value)}
+                                disabled={updatingId === order.id}
+                                className="rounded-xl px-4 py-2 text-sm font-black text-white transition-all active:scale-[0.97] disabled:opacity-40"
+                                style={{
+                                  background: "linear-gradient(135deg, #16a34a, #15803d)",
+                                  boxShadow: "0 4px 16px rgba(22,163,74,0.35)",
+                                }}
+                              >
+                                {updatingId === order.id ? "…" : nextAction.label}
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               );

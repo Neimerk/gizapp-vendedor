@@ -1,14 +1,52 @@
 @import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-}
+*{ box-sizing: border-box; }
 
-html,
-body,
-#root {
+html, body, #root {
   margin: 0;
   min-height: 100%;
   font-family: Inter, sans-serif;
-  background: #f4f7fb;
+  background: #080c14;
+  color: #f1f5f9;
 }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+:focus-visible { outline: 2px solid #16a34a; outline-offset: 2px; }
+
+/* ── DARK OVERRIDES para páginas que não foram reescritas ── */
+.bg-white { background-color: #0f1824 !important; }
+.bg-\[\#f8fafc\] { background-color: #0b1120 !important; }
+.bg-\[\#f1f5f9\] { background-color: #0d1626 !important; }
+.bg-\[\#f0f2f7\] { background-color: #080c14 !important; }
+.bg-\[\#f0f9f4\] { background-color: #080c14 !important; }
+
+.border-\[\#e8eaf0\] { border-color: rgba(255,255,255,0.07) !important; }
+.border-\[\#e2e8f0\] { border-color: rgba(255,255,255,0.08) !important; }
+.border-\[\#f1f5f9\] { border-color: rgba(255,255,255,0.05) !important; }
+
+.text-\[\#0f172a\] { color: #f1f5f9 !important; }
+.text-\[\#1e293b\] { color: #e2e8f0 !important; }
+.text-\[\#475569\] { color: #94a3b8 !important; }
+.text-\[\#64748b\] { color: #64748b !important; }
+.text-\[\#94a3b8\] { color: #475569 !important; }
+
+input:not([class*="bg-\[#16"]):not([class*="from-"]) {
+  background-color: #0b1120 !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(255,255,255,0.1) !important;
+}
+input::placeholder { color: #334155 !important; }
+textarea { background-color: #0b1120 !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.1) !important; }
+select { background-color: #0b1120 !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.1) !important; }
+
+/* animate-pulse dark */
+.animate-pulse { background-color: #111827 !important; }
+
+/* Card premium hover */
+.card-hover { transition: transform 180ms ease, box-shadow 180ms ease; }
+.card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.06); }
