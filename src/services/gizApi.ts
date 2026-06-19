@@ -9,7 +9,7 @@ const IMAGE_BASE_URL: string =
 export const DEFAULT_STORE_ID =
   "b5c148b0-a07b-4532-aca3-e66c12f389af";
 
-function getSellerStoreId() {
+export function getSellerStoreId() {
   return getAuth()?.storeId || DEFAULT_STORE_ID;
 }
 
@@ -356,6 +356,14 @@ export async function uploadProductImage(file: File): Promise<string> {
 
   const data = await response.json();
   return data.imageUrl;
+}
+
+export async function clearStoreProducts(storeId: string): Promise<{ removed: number; disabled: number }> {
+  const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/store/${storeId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Erro ao limpar produtos da loja.");
+  return response.json();
 }
 
 export async function removeStoreProduct(id: string): Promise<{ softDeleted: boolean }> {

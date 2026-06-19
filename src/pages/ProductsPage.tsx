@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import {
   addProductFromCatalog,
+  clearStoreProducts,
   getCatalogProducts,
   getProductImageUrl,
   getStoreProducts,
@@ -23,6 +24,7 @@ import {
   type CatalogProduct,
   type StoreProduct,
 } from "../services/gizApi";
+import { getSellerStoreId } from "../services/gizApi";
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import ImagePickerModal from "../components/ui/ImagePickerModal";
@@ -62,6 +64,9 @@ export default function ProductsPage() {
   // Delete modal
   const [deleteTarget, setDeleteTarget] = useState<LocalProduct | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [clearing, setClearing] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Catalog modal
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -146,6 +151,21 @@ export default function ProductsPage() {
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
+
+  async function handleClearStore() {
+    try {
+      setClearing(true);
+      const storeId = getSellerStoreId();
+      await clearStoreProducts(storeId);
+      setProducts([]);
+      setShowClearConfirm(false);
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "Erro ao limpar loja.");
+    } finally {
+      setClearing(false);
+    }
+  }
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -260,14 +280,26 @@ export default function ProductsPage() {
             )}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setCatalogOpen(true)}
-          className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
-        >
-          <PackagePlus size={18} />
-          Adicionar produtos
-        </button>
+        <div className="flex items-center gap-2">
+          {products.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowClearConfirm(true)}
+              className="flex items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-black text-red-600 hover:bg-red-100"
+            >
+              <Trash2 size={16} />
+              Limpar loja
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCatalogOpen(true)}
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
+          >
+            <PackagePlus size={18} />
+            Adicionar produtos
+          </button>
+        </div>
       </div>
 
       {/* Search */}
@@ -330,6 +362,42 @@ export default function ProductsPage() {
           onConfirm={handleImageConfirmed}
           onClose={() => setImagePickerProduct(null)}
         />
+      )}
+
+      {/* Clear store confirmation modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50">
+              <Trash2 size={22} className="text-red-500" />
+            </div>
+            <h2 className="text-lg font-black text-[#0f172a]">Limpar todos os produtos?</h2>
+            <p className="mt-2 text-sm text-[#64748b]">
+              Todos os <strong>{products.length} produtos</strong> serão removidos da loja. Produtos com pedidos vinculados serão apenas desativados.
+              <br /><br />
+              Use para resetar a loja e começar do zero com produtos reais.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleClearStore}
+                disabled={clearing}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-red-500 py-3 text-sm font-black text-white disabled:opacity-60"
+              >
+                {clearing ? (
+                  <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Limpando…</>
+                ) : (
+                  <><Trash2 size={14} /> Limpar tudo</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete confirmation modal */}
