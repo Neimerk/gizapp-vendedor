@@ -29,7 +29,6 @@ function isToday(d: string) {
 export default function DashboardPage() {
   const auth = getAuth();
   const canSell = auth?.role === "Seller" || auth?.role === "Admin" || (auth?.role === "Courier" && !!auth?.storeId);
-  if (!canSell) return <Navigate to="/entregas" replace />;
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<StoreProduct[]>([]);
@@ -37,6 +36,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!canSell) return;
     (async () => {
       try {
         const [o, p, s] = await Promise.all([
@@ -47,7 +47,9 @@ export default function DashboardPage() {
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
-  }, []);
+  }, [canSell]);
+
+  if (!canSell) return <Navigate to="/entregas" replace />;
 
   const stats = useMemo(() => {
     const today = orders.filter(o => isToday(o.createdAt));

@@ -9,23 +9,23 @@ import {
   AlertCircle,
   CheckCircle2,
   Tag,
-  RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
   addProductFromCatalog,
   clearStoreProducts,
-  getCatalogProducts,
+  createProduct,
   getProductImageUrl,
   getStoreProducts,
   removeStoreProduct,
   updateStoreProduct,
   updateStoreProductImage,
-  type CatalogProduct,
   type StoreProduct,
 } from "../services/gizApi";
 import { getSellerStoreId } from "../services/gizApi";
+import { categories } from "../data/categories";
+import { categoryIcons } from "../data/categoryIcons";
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
 import ImagePickerModal from "../components/ui/ImagePickerModal";
@@ -37,14 +37,33 @@ type LocalProduct = StoreProduct & {
   _imageAlt: string;
 };
 
-type CatalogSetup = {
-  product: CatalogProduct;
+type NewProductForm = {
+  name: string;
+  category: string;
+  brand: string;
+  description: string;
+  imageUrl: string;
+  imageAlt: string;
   price: string;
+  promotionalPrice: string;
   stock: string;
+  available: boolean;
+};
+
+const EMPTY_FORM: NewProductForm = {
+  name: "",
+  category: "",
+  brand: "",
+  description: "",
+  imageUrl: "",
+  imageAlt: "",
+  price: "0.00",
+  promotionalPrice: "",
+  stock: "1",
+  available: true,
 };
 
 const PAGE_SIZE = 20;
-const CATALOG_PAGE_SIZE = 24;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "" };
@@ -58,7 +77,7 @@ export default function ProductsPage() {
   const [savingId, setSavingId] = useState("");
   const [search, setSearch] = useState("");
 
-  // Image picker
+  // Image picker for existing products
   const [imagePickerProduct, setImagePickerProduct] = useState<LocalProduct | null>(null);
   const [savingImageId, setSavingImageId] = useState("");
 
@@ -70,21 +89,22 @@ export default function ProductsPage() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showUnavailable, setShowUnavailable] = useState(false);
 
-  // Catalog modal
-  const [catalogOpen, setCatalogOpen] = useState(false);
-  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
-  const [catalogLoading, setCatalogLoading] = useState(false);
-  const [catalogSearch, setCatalogSearch] = useState("");
-  const [catalogError, setCatalogError] = useState<string | null>(null);
-  const [catalogSetup, setCatalogSetup] = useState<CatalogSetup | null>(null);
-  const [addingId, setAddingId] = useState("");
+  // Add product modal
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  // Error toast
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  function showError(msg: string) {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(null), 4000);
+  }
 
   async function loadProducts() {
     try {
       setLoading(true);
       const data = await getStoreProducts();
-      // Só carrega produtos que o lojista EXPLICITAMENTE ativou
-      // Produtos pré-carregados do catálogo ficam com available=false e são ignorados
       setProducts(data.filter(p => p.available).map(toLocal));
     } catch (e) {
       console.error(e);
@@ -93,28 +113,7 @@ export default function ProductsPage() {
     }
   }
 
-  async function loadCatalog(s = "") {
-    setCatalogLoading(true);
-    setCatalogError(null);
-    try {
-      const data = await getCatalogProducts(s);
-      setCatalogProducts(data);
-    } catch (e) {
-      console.error(e);
-      setCatalogError("Catálogo indisponível no momento. Use a aba URL ou upload de imagem.");
-      setCatalogProducts([]);
-    } finally {
-      setCatalogLoading(false);
-    }
-  }
-
   useEffect(() => { loadProducts(); }, []);
-
-  useEffect(() => {
-    if (!catalogOpen) return;
-    const t = setTimeout(() => loadCatalog(catalogSearch), 400);
-    return () => clearTimeout(t);
-  }, [catalogSearch, catalogOpen]);
 
   // ── Local mutations ────────────────────────────────────────────────────────
 
@@ -151,7 +150,7 @@ export default function ProductsPage() {
       );
     } catch (e) {
       console.error(e);
-      alert("Erro ao salvar produto.");
+      showError("Erro ao salvar produto.");
     } finally {
       setSavingId("");
     }
@@ -168,7 +167,7 @@ export default function ProductsPage() {
       setShowClearConfirm(false);
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Erro ao limpar loja.");
+      showError(e instanceof Error ? e.message : "Erro ao limpar loja.");
     } finally {
       setClearing(false);
     }
@@ -179,12 +178,11 @@ export default function ProductsPage() {
     try {
       setDeleting(true);
       await removeStoreProduct(deleteTarget.id);
-      // Soft ou hard delete: remove sempre da lista visível (só mostramos available=true)
       setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
-      alert("Erro ao remover produto.");
+      showError("Erro ao remover produto.");
     } finally {
       setDeleting(false);
     }
@@ -192,7 +190,7 @@ export default function ProductsPage() {
 
   // ── Image ──────────────────────────────────────────────────────────────────
 
-  async function handleImageConfirmed(imageUrl: string) {
+  async function handleImageConfirmed(imageUrl: string, imageAlt?: string) {
     if (!imagePickerProduct) return;
     const pid = imagePickerProduct.id;
     setImagePickerProduct(null);
@@ -200,48 +198,53 @@ export default function ProductsPage() {
     try {
       await updateStoreProductImage(pid, imageUrl);
       setProducts(cur =>
-        cur.map(p => p.id === pid ? { ...p, imageUrl } : p)
+        cur.map(p => p.id === pid ? {
+          ...p,
+          imageUrl,
+          ...(imageAlt ? { _imageAlt: imageAlt, _modified: true } : {}),
+        } : p)
       );
     } catch (e) {
       console.error(e);
-      alert("Erro ao salvar imagem.");
+      showError("Erro ao salvar imagem.");
     } finally {
       setSavingImageId("");
     }
   }
 
-  // ── Catalog add ────────────────────────────────────────────────────────────
+  // ── Add product ────────────────────────────────────────────────────────────
 
-  function openSetup(product: CatalogProduct) {
-    setCatalogSetup({ product, price: product.price?.toFixed(2) ?? "0.00", stock: "1" });
-  }
-
-  async function handleConfirmAdd() {
-    if (!catalogSetup) return;
+  async function handleAddProduct(form: NewProductForm) {
     try {
-      setAddingId(catalogSetup.product.id);
-      const added = await addProductFromCatalog(catalogSetup.product.id);
-      // Update price/stock right after adding
-      await updateStoreProduct(added.id, {
-        price: parseFloat(catalogSetup.price) || 0,
-        stock: parseInt(catalogSetup.stock) || 0,
-        available: true,
+      setAdding(true);
+      const catalogProduct = await createProduct({
+        name: form.name.trim(),
+        category: form.category,
+        brand: form.brand.trim() || undefined,
+        description: form.description.trim() || undefined,
+        imageUrl: form.imageUrl || undefined,
+        imageAlt: form.imageAlt.trim() || undefined,
+      });
+      const storeProduct = await addProductFromCatalog(catalogProduct.id);
+      await updateStoreProduct(storeProduct.id, {
+        price: parseFloat(form.price) || 0,
+        promotionalPrice: form.promotionalPrice ? parseFloat(form.promotionalPrice) : null,
+        stock: parseInt(form.stock) || 0,
+        available: form.available,
+        imageAlt: form.imageAlt.trim() || undefined,
       });
       await loadProducts();
-      setCatalogSetup(null);
-      setCatalogOpen(false);
-      setCatalogSearch("");
+      setAddModalOpen(false);
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : "Erro ao adicionar produto.");
+      showError(e instanceof Error ? e.message : "Erro ao adicionar produto.");
     } finally {
-      setAddingId("");
+      setAdding(false);
     }
   }
 
   // ── Derived state ──────────────────────────────────────────────────────────
 
-  // Produtos inativos que o lojista desativou (não os pré-seeded, que nunca entram no state)
   const unavailableCount = products.filter(p => !p.available).length;
 
   const filtered = useMemo(() => {
@@ -257,20 +260,23 @@ export default function ProductsPage() {
 
   const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE);
 
-  const catalogFiltered = useMemo(() => catalogProducts, [catalogProducts]);
-  const {
-    page: catPage,
-    setPage: setCatPage,
-    totalPages: catTotalPages,
-    pageItems: catItems,
-  } = usePagination(catalogFiltered, CATALOG_PAGE_SIZE);
-
   const modifiedCount = products.filter(p => p._modified).length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div>
+      {/* Error toast */}
+      {errorMsg && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-red-200 bg-white px-5 py-3.5 shadow-xl shadow-black/10">
+          <AlertCircle size={16} className="shrink-0 text-red-500" />
+          <p className="text-sm font-semibold text-red-700">{errorMsg}</p>
+          <button onClick={() => setErrorMsg(null)} className="ml-1 text-red-400 hover:text-red-600">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -310,11 +316,11 @@ export default function ProductsPage() {
           )}
           <button
             type="button"
-            onClick={() => setCatalogOpen(true)}
+            onClick={() => setAddModalOpen(true)}
             className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
           >
             <PackagePlus size={18} />
-            Adicionar produtos
+            Adicionar produto
           </button>
         </div>
       </div>
@@ -343,7 +349,7 @@ export default function ProductsPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState hasSearch={!!search} onClearSearch={() => setSearch("")} onAddProduct={() => setCatalogOpen(true)} />
+        <EmptyState hasSearch={!!search} onClearSearch={() => setSearch("")} onAddProduct={() => setAddModalOpen(true)} />
       ) : (
         <>
           <div className="space-y-3">
@@ -371,7 +377,7 @@ export default function ProductsPage() {
         </>
       )}
 
-      {/* Image picker modal */}
+      {/* Image picker modal (existing products) */}
       {imagePickerProduct && (
         <ImagePickerModal
           productName={imagePickerProduct.name}
@@ -427,36 +433,13 @@ export default function ProductsPage() {
         />
       )}
 
-      {/* Catalog modal */}
-      {catalogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          {catalogSetup ? (
-            <SetupModal
-              setup={catalogSetup}
-              adding={addingId === catalogSetup.product.id}
-              onChangePrice={p => setCatalogSetup(s => s ? { ...s, price: p } : s)}
-              onChangeStock={s => setCatalogSetup(st => st ? { ...st, stock: s } : st)}
-              onConfirm={handleConfirmAdd}
-              onBack={() => setCatalogSetup(null)}
-            />
-          ) : (
-            <CatalogModal
-              products={catItems}
-              loading={catalogLoading}
-              error={catalogError}
-              onRetry={() => loadCatalog(catalogSearch)}
-              search={catalogSearch}
-              onSearch={q => { setCatalogSearch(q); setCatPage(1); }}
-              page={catPage}
-              totalPages={catTotalPages}
-              totalItems={catalogFiltered.length}
-              onPageChange={setCatPage}
-              storeProductIds={new Set(products.map(p => p.productId))}
-              onSelect={openSetup}
-              onClose={() => { setCatalogOpen(false); setCatalogSearch(""); setCatalogError(null); }}
-            />
-          )}
-        </div>
+      {/* Add product modal */}
+      {addModalOpen && (
+        <AddProductModal
+          adding={adding}
+          onConfirm={handleAddProduct}
+          onClose={() => setAddModalOpen(false)}
+        />
       )}
     </div>
   );
@@ -705,7 +688,7 @@ function DeleteModal({
         </div>
         <h2 className="text-lg font-black text-[#0f172a]">Excluir da loja?</h2>
         <p className="mt-1 text-sm text-[#64748b]">
-          "<span className="font-semibold text-[#0f172a]">{name}</span>" será removido da sua loja. O produto continua no catálogo global.
+          "<span className="font-semibold text-[#0f172a]">{name}</span>" será removido da sua loja.
         </p>
         <div className="mt-6 flex gap-3">
           <button
@@ -731,243 +714,271 @@ function DeleteModal({
   );
 }
 
-// ── SetupModal (pre-add config) ───────────────────────────────────────────────
+// ── AddProductModal ───────────────────────────────────────────────────────────
 
-function SetupModal({
-  setup,
+function AddProductModal({
   adding,
-  onChangePrice,
-  onChangeStock,
   onConfirm,
-  onBack,
-}: {
-  setup: CatalogSetup;
-  adding: boolean;
-  onChangePrice: (v: string) => void;
-  onChangeStock: (v: string) => void;
-  onConfirm: () => void;
-  onBack: () => void;
-}) {
-  return (
-    <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-[#f8fafc]">
-          <img
-            src={setup.product.imageUrl ? `/images/${setup.product.imageUrl.split('/').slice(-2).join('/')}` : "/placeholder.png"}
-            alt={setup.product.name}
-            className="h-12 w-12 object-contain"
-            onError={e => { e.currentTarget.src = "/placeholder.png"; }}
-          />
-        </div>
-        <div className="min-w-0">
-          <p className="truncate font-black text-[#0f172a]">{setup.product.name}</p>
-          <p className="text-xs text-[#64748b]">{setup.product.category}</p>
-        </div>
-      </div>
-
-      <h2 className="mb-4 text-base font-black text-[#0f172a]">Configurar antes de adicionar</h2>
-
-      <div className="space-y-3">
-        <div>
-          <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
-            Preço de venda (R$)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={setup.price}
-            onChange={e => onChangePrice(e.target.value)}
-            className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
-            Estoque inicial (unidades)
-          </label>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onChangeStock(String(Math.max(0, parseInt(setup.stock) - 1)))}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#e2e8f0] bg-white"
-            >
-              <Minus size={14} />
-            </button>
-            <input
-              type="number"
-              min="0"
-              value={setup.stock}
-              onChange={e => onChangeStock(e.target.value)}
-              className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-2.5 text-center text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
-            />
-            <button
-              type="button"
-              onClick={() => onChangeStock(String(parseInt(setup.stock) + 1))}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#16a34a]/30 bg-[#f0fdf4] text-[#16a34a]"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-5 flex gap-3">
-        <button
-          onClick={onBack}
-          className="flex-1 rounded-2xl border border-[#e2e8f0] py-3 text-sm font-black text-[#64748b]"
-        >
-          ← Voltar
-        </button>
-        <button
-          onClick={onConfirm}
-          disabled={adding}
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white disabled:opacity-60"
-        >
-          {adding ? (
-            <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Adicionando…</>
-          ) : (
-            <><PackagePlus size={15} /> Adicionar à loja</>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── CatalogModal ──────────────────────────────────────────────────────────────
-
-function CatalogModal({
-  products,
-  loading,
-  error,
-  onRetry,
-  search,
-  onSearch,
-  page,
-  totalPages,
-  totalItems,
-  onPageChange,
-  storeProductIds,
-  onSelect,
   onClose,
 }: {
-  products: CatalogProduct[];
-  loading: boolean;
-  error: string | null;
-  onRetry: () => void;
-  search: string;
-  onSearch: (q: string) => void;
-  page: number;
-  totalPages: number;
-  totalItems: number;
-  onPageChange: (p: number) => void;
-  storeProductIds: Set<string>;
-  onSelect: (p: CatalogProduct) => void;
+  adding: boolean;
+  onConfirm: (form: NewProductForm) => void;
   onClose: () => void;
 }) {
+  const [form, setForm] = useState<NewProductForm>(EMPTY_FORM);
+  const [imagePickerOpen, setImagePickerOpen] = useState(false);
+
+  function patch(changes: Partial<NewProductForm>) {
+    setForm(f => ({ ...f, ...changes }));
+  }
+
+  const canSubmit = form.name.trim().length > 0 && form.category !== "";
+
   return (
-    <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-      <div className="flex items-center justify-between border-b border-[#e2e8f0] px-6 py-5">
-        <div>
-          <h2 className="text-xl font-black text-[#0f172a]">Catálogo global</h2>
-          <p className="mt-0.5 text-xs text-[#64748b]">
-            Busque e configure o preço + estoque antes de adicionar à sua loja.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      <div className="border-b border-[#e2e8f0] px-6 py-4">
-        <div className="flex items-center gap-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5">
-          <Search size={15} className="text-[#94a3b8]" />
-          <input
-            value={search}
-            onChange={e => onSearch(e.target.value)}
-            placeholder="Buscar no catálogo..."
-            className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-[#cbd5e1]"
-          />
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        {loading ? (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-28 animate-pulse rounded-2xl bg-[#f8fafc]" />
-            ))}
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center gap-4 py-16 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50">
-              <AlertCircle size={28} className="text-amber-500" />
-            </div>
+    <>
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 backdrop-blur-sm sm:items-center sm:p-4">
+        <div className="flex max-h-[95dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+          {/* Header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] px-6 py-4">
             <div>
-              <p className="font-black text-[#0f172a]">Catálogo temporariamente indisponível</p>
-              <p className="mt-1 text-sm text-[#64748b]">{error}</p>
+              <h2 className="text-base font-black text-[#0f172a]">Novo produto</h2>
+              <p className="mt-0.5 text-xs text-[#94a3b8]">Preencha os dados do produto</p>
             </div>
             <button
-              onClick={onRetry}
-              className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-black text-[#0f172a] hover:bg-[#f8fafc]"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
             >
-              <RefreshCw size={14} /> Tentar novamente
+              <X size={17} />
             </button>
           </div>
-        ) : products.length === 0 ? (
-          <div className="py-12 text-center font-bold text-[#64748b]">Nenhum produto encontrado.</div>
-        ) : (
-          <>
-            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-              {products.map(product => {
-                const inStore = storeProductIds.has(product.id);
-                return (
-                  <div key={product.id} className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
-                    <div className="flex gap-3">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white">
-                        <img
-                          src={getProductImageUrl(product.imageUrl)}
-                          alt={product.name}
-                          className="h-14 w-14 object-contain"
-                          onError={e => { e.currentTarget.src = "/placeholder.png"; }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="line-clamp-2 text-xs font-black text-[#0f172a]">{product.name}</h3>
-                        <p className="mt-0.5 text-[10px] text-[#64748b]">
-                          {product.category}{product.brand ? ` · ${product.brand}` : ""}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => !inStore && onSelect(product)}
-                          disabled={inStore}
-                          className={`mt-2 rounded-lg px-3 py-1 text-[10px] font-black text-white disabled:opacity-60 ${
-                            inStore ? "bg-[#94a3b8]" : "bg-[#16a34a] hover:bg-[#15803d]"
-                          }`}
-                        >
-                          {inStore ? "Já na loja" : "Configurar →"}
-                        </button>
-                      </div>
+
+          {/* Content */}
+          <div className="flex-1 space-y-4 overflow-y-auto p-6">
+            {/* Image picker area */}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                Imagem do produto
+              </label>
+              <button
+                type="button"
+                onClick={() => setImagePickerOpen(true)}
+                className={`relative flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
+                  form.imageUrl
+                    ? "border-[#16a34a]/30 bg-[#f8fafc]"
+                    : "border-[#e2e8f0] bg-[#f8fafc] hover:border-[#16a34a]/40 hover:bg-[#f0fdf4]"
+                }`}
+              >
+                {form.imageUrl ? (
+                  <>
+                    <img
+                      src={getProductImageUrl(form.imageUrl)}
+                      alt={form.name || "produto"}
+                      className="h-full w-full object-contain"
+                      onError={e => { e.currentTarget.src = "/placeholder.png"; }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100 rounded-2xl">
+                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-[#0f172a]">Trocar imagem</span>
                     </div>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-[#94a3b8]">
+                    <ImagePlus size={28} />
+                    <span className="text-xs font-semibold text-[#64748b]">Adicionar imagem</span>
+                    <span className="text-[10px] text-[#cbd5e1]">Upload próprio ou banco de imagens da API</span>
                   </div>
-                );
-              })}
+                )}
+              </button>
             </div>
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              totalItems={totalItems}
-              pageSize={24}
-              onPageChange={onPageChange}
-            />
-          </>
-        )}
+
+            {/* Name */}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                Nome do produto <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => patch({ name: e.target.value })}
+                placeholder="Ex: Coca-Cola Lata 350ml"
+                className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:text-[#cbd5e1]"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                Categoria <span className="text-red-400">*</span>
+              </label>
+              <select
+                value={form.category}
+                onChange={e => patch({ category: e.target.value })}
+                className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20"
+              >
+                <option value="">Selecione uma categoria…</option>
+                {categories.map(cat => (
+                  <option key={cat.slug} value={cat.slug}>
+                    {categoryIcons[cat.slug]} {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Brand + Description */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Marca</label>
+                <input
+                  type="text"
+                  value={form.brand}
+                  onChange={e => patch({ brand: e.target.value })}
+                  placeholder="Ex: Coca-Cola, Nestlé…"
+                  className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:text-[#cbd5e1]"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Descrição</label>
+                <input
+                  type="text"
+                  value={form.description}
+                  onChange={e => patch({ description: e.target.value })}
+                  placeholder="Descrição curta do produto…"
+                  className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:text-[#cbd5e1]"
+                />
+              </div>
+            </div>
+
+            {/* Price + Promo */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                  Preço <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#94a3b8]">R$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.price}
+                    onChange={e => patch({ price: e.target.value })}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-3 pl-9 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Preço promocional</label>
+                <div className="relative">
+                  <Tag size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.promotionalPrice}
+                    onChange={e => patch({ promotionalPrice: e.target.value })}
+                    placeholder="—"
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-3 pl-8 pr-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:font-normal placeholder:text-[#cbd5e1]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Stock + Available */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Estoque</label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => patch({ stock: String(Math.max(0, parseInt(form.stock || "0") - 1)) })}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f1f5f9]"
+                  >
+                    <Minus size={13} />
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.stock}
+                    onChange={e => patch({ stock: e.target.value })}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-2.5 text-center text-sm font-bold outline-none focus:ring-2 focus:ring-[#16a34a]/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => patch({ stock: String(parseInt(form.stock || "0") + 1) })}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#16a34a]/30 bg-[#f0fdf4] text-[#16a34a]"
+                  >
+                    <Plus size={13} />
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Status inicial</label>
+                <button
+                  type="button"
+                  onClick={() => patch({ available: !form.available })}
+                  className={`flex h-10 w-full items-center justify-center gap-2 rounded-xl border text-xs font-black transition-colors ${
+                    form.available
+                      ? "border-[#16a34a]/30 bg-[#f0fdf4] text-[#16a34a]"
+                      : "border-[#e2e8f0] bg-[#f8fafc] text-[#94a3b8]"
+                  }`}
+                >
+                  <div className={`h-2.5 w-2.5 rounded-full ${form.available ? "bg-[#16a34a]" : "bg-[#cbd5e1]"}`} />
+                  {form.available ? "Ativo" : "Inativo"}
+                </button>
+              </div>
+            </div>
+
+            {/* Alt text (only when image is selected) */}
+            {form.imageUrl && (
+              <div>
+                <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+                  Alt da imagem (SEO)
+                </label>
+                <input
+                  type="text"
+                  value={form.imageAlt}
+                  onChange={e => patch({ imageAlt: e.target.value })}
+                  placeholder="Descreva a imagem para buscadores e acessibilidade…"
+                  className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-xs font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:text-[#cbd5e1]"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="flex shrink-0 gap-3 border-t border-[#e2e8f0] px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] hover:bg-[#f8fafc]"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm(form)}
+              disabled={adding || !canSubmit}
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 disabled:opacity-50"
+            >
+              {adding ? (
+                <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> Adicionando…</>
+              ) : (
+                <><PackagePlus size={15} /> Adicionar produto</>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
+
+      {/* Image picker overlaid on top of the add modal */}
+      {imagePickerOpen && (
+        <ImagePickerModal
+          productName={form.name || "Novo produto"}
+          currentImageUrl={form.imageUrl}
+          onConfirm={(url, alt) => { patch({ imageUrl: url, ...(alt ? { imageAlt: alt } : {}) }); setImagePickerOpen(false); }}
+          onClose={() => setImagePickerOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
@@ -1000,7 +1011,7 @@ function EmptyState({
       </div>
       <h3 className="text-lg font-black text-[#0f172a]">Nenhum produto na loja</h3>
       <p className="mt-1 text-sm text-[#64748b]">
-        Adicione produtos do catálogo global para começar a vender.
+        Adicione seu primeiro produto para começar a vender.
       </p>
       <button
         onClick={onAddProduct}

@@ -313,7 +313,7 @@ export async function getCatalogProducts(search = ""): Promise<CatalogProduct[]>
     params.set("search", search.trim());
   }
 
-  const response = await fetch(`${GIZ_API_URL}/api/products?${params}`, {
+  const response = await authFetch(`${GIZ_API_URL}/api/products?${params}`, {
     cache: "no-store",
   });
 
@@ -324,6 +324,27 @@ export async function getCatalogProducts(search = ""): Promise<CatalogProduct[]>
   const data = (await response.json()) as CatalogProductsResponse;
 
   return data.items;
+}
+
+export type CreateProductPayload = {
+  name: string;
+  category: string;
+  brand?: string;
+  description?: string;
+  imageUrl?: string;
+  imageAlt?: string;
+};
+
+export async function createProduct(data: CreateProductPayload): Promise<CatalogProduct> {
+  const response = await authFetch(`${GIZ_API_URL}/api/products`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null);
+    throw new Error(error?.message || "Erro ao criar produto.");
+  }
+  return response.json();
 }
 
 export async function addProductFromCatalog(productId: string) {

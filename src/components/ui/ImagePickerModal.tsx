@@ -39,7 +39,7 @@ type UploadState =
 type Props = {
   productName: string;
   currentImageUrl?: string;
-  onConfirm: (imageUrl: string) => void;
+  onConfirm: (imageUrl: string, imageAlt?: string) => void;
   onClose: () => void;
 };
 
@@ -61,12 +61,12 @@ export default function ImagePickerModal({
   // bank tab
   const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<CatalogProduct | null>(null);
   const [confirming, setConfirming] = useState(false);
   const bankLoaded = useRef(false);
 
-  // Load catalog when bank tab first opens
   useEffect(() => {
     if (tab !== "bank") return;
     if (bankLoaded.current) return;
@@ -80,7 +80,6 @@ export default function ImagePickerModal({
     return () => clearTimeout(t);
   }, [search, tab]);
 
-  // Cleanup object URLs on unmount
   useEffect(() => {
     return () => {
       if (upload.phase === "ready") URL.revokeObjectURL(upload.result.previewUrl);
@@ -89,18 +88,19 @@ export default function ImagePickerModal({
 
   async function loadCatalog(q: string) {
     setCatalogLoading(true);
+    setCatalogError(null);
     try {
       const items = await getCatalogProducts(q);
       setCatalog(items.filter((p) => p.imageUrl));
-    } catch {
-      /* silent */
+    } catch (e) {
+      setCatalogError(e instanceof Error ? e.message : "Erro ao carregar banco de imagens.");
+      setCatalog([]);
     } finally {
       setCatalogLoading(false);
     }
   }
 
   async function handleFileChosen(file: File) {
-    // Revoke previous preview if any
     if (upload.phase === "ready") URL.revokeObjectURL(upload.result.previewUrl);
     setUpload({ phase: "processing" });
     try {
@@ -134,7 +134,7 @@ export default function ImagePickerModal({
     if (!selected?.imageUrl) return;
     setConfirming(true);
     try {
-      onConfirm(selected.imageUrl);
+      onConfirm(selected.imageUrl, selected.imageAlt || undefined);
     } finally {
       setConfirming(false);
     }
@@ -146,7 +146,7 @@ export default function ImagePickerModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center p-0 sm:p-4">
       <div className="flex max-h-[95dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl sm:rounded-3xl bg-white shadow-2xl">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] px-6 py-4">
@@ -201,8 +201,10 @@ export default function ImagePickerModal({
             <BankTab
               catalog={catalog}
               loading={catalogLoading}
+              error={catalogError}
               search={search}
               onSearch={(q) => { setSearch(q); setSelected(null); }}
+              onRetry={() => loadCatalog(search)}
               selected={selected}
               onSelect={setSelected}
               confirming={confirming}
@@ -242,24 +244,9 @@ function UploadTab({
 
   return (
     <div className="p-6 space-y-5">
-      {/* Hidden inputs */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleInput}
-      />
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*, .heic, .heif"
-        className="hidden"
-        onChange={handleInput}
-      />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleInput} />
+      <input ref={fileRef} type="file" accept="image/*, .heic, .heif" className="hidden" onChange={handleInput} />
 
-      {/* Idle — action buttons */}
       {upload.phase === "idle" && (
         <>
           <div className="grid grid-cols-2 gap-3">
@@ -290,7 +277,6 @@ function UploadTab({
             </button>
           </div>
 
-          {/* Current image preview */}
           {currentImageUrl && (
             <div className="flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-3">
               <img
@@ -306,11 +292,15 @@ function UploadTab({
             </div>
           )}
 
-          <ProcessingInfo />
+          <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
+            <p className="text-[11px] font-bold text-[#64748b]">
+              🔧 <span className="font-black text-[#0f172a]">Processamento automático:</span>{" "}
+              imagens são redimensionadas para até 1200×1200 px e convertidas para WebP antes de salvar.
+            </p>
+          </div>
         </>
       )}
 
-      {/* Processing */}
       {upload.phase === "processing" && (
         <div className="flex flex-col items-center gap-4 py-12">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f0fdf4]">
@@ -323,16 +313,10 @@ function UploadTab({
         </div>
       )}
 
-      {/* Ready — preview + stats */}
       {upload.phase === "ready" && (
-        <ReadyPanel
-          result={upload.result}
-          onConfirm={onConfirm}
-          onReplace={() => fileRef.current?.click()}
-        />
+        <ReadyPanel result={upload.result} onConfirm={onConfirm} onReplace={() => fileRef.current?.click()} />
       )}
 
-      {/* Uploading */}
       {upload.phase === "uploading" && (
         <div className="flex flex-col items-center gap-4 py-12">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#16a34a]/10">
@@ -345,7 +329,6 @@ function UploadTab({
         </div>
       )}
 
-      {/* Error */}
       {upload.phase === "error" && (
         <div className="flex flex-col items-center gap-4 py-10">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
@@ -368,110 +351,49 @@ function UploadTab({
   );
 }
 
-// ── Ready panel (preview + stats) ─────────────────────────────────────────────
+// ── Ready panel ───────────────────────────────────────────────────────────────
 
-function ReadyPanel({
-  result,
-  onConfirm,
-  onReplace,
-}: {
-  result: ProcessedImage;
-  onConfirm: () => void;
-  onReplace: () => void;
-}) {
+function ReadyPanel({ result, onConfirm, onReplace }: { result: ProcessedImage; onConfirm: () => void; onReplace: () => void }) {
   const saving = savingPct(result.originalBytes, result.processedBytes);
-
   return (
     <div className="space-y-4">
-      {/* Preview */}
       <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-[#f8fafc]">
-        <img
-          src={result.previewUrl}
-          alt="Prévia"
-          className="mx-auto block max-h-64 w-full object-contain"
-        />
+        <img src={result.previewUrl} alt="Prévia" className="mx-auto block max-h-64 w-full object-contain" />
       </div>
-
-      {/* Stats */}
       <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
-        <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#94a3b8]">
-          Processamento
-        </p>
+        <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-[#94a3b8]">Processamento</p>
         <div className="grid grid-cols-3 gap-3 text-center">
           <StatCell label="Original" value={fmtBytes(result.originalBytes)} />
-          <div className="flex items-center justify-center">
-            <ArrowRight size={16} className="text-[#16a34a]" />
-          </div>
-          <StatCell
-            label="WebP final"
-            value={fmtBytes(result.processedBytes)}
-            accent
-          />
+          <div className="flex items-center justify-center"><ArrowRight size={16} className="text-[#16a34a]" /></div>
+          <StatCell label="WebP final" value={fmtBytes(result.processedBytes)} accent />
         </div>
         <div className="mt-3 flex items-center justify-between rounded-xl bg-[#f0fdf4] px-4 py-2.5">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 size={14} className="text-[#16a34a]" />
-            <span className="text-xs font-black text-[#16a34a]">
-              {result.width} × {result.height} px · formato WebP
-            </span>
+            <span className="text-xs font-black text-[#16a34a]">{result.width} × {result.height} px · WebP</span>
           </div>
           {saving > 0 && (
-            <span className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-black text-white">
-              -{saving}% menor
-            </span>
+            <span className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-black text-white">-{saving}% menor</span>
           )}
         </div>
       </div>
-
-      {/* Actions */}
       <div className="flex gap-3">
-        <button
-          onClick={onReplace}
-          className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
-        >
-          <RotateCcw size={14} />
-          Trocar
+        <button onClick={onReplace} className="flex items-center gap-2 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-3 text-sm font-black text-[#64748b]">
+          <RotateCcw size={14} /> Trocar
         </button>
-        <button
-          onClick={onConfirm}
-          className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 transition-transform active:scale-[0.98]"
-        >
-          <CheckCircle2 size={16} />
-          Usar esta imagem
+        <button onClick={onConfirm} className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25">
+          <CheckCircle2 size={16} /> Usar esta imagem
         </button>
       </div>
     </div>
   );
 }
 
-function StatCell({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
+function StatCell({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</p>
-      <p className={`mt-0.5 text-sm font-black ${accent ? "text-[#16a34a]" : "text-[#0f172a]"}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function ProcessingInfo() {
-  return (
-    <div className="rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
-      <p className="text-[11px] font-bold text-[#64748b]">
-        🔧 <span className="font-black text-[#0f172a]">Processamento automático:</span>{" "}
-        todas as imagens são redimensionadas para no máximo 1200×1200 px e
-        convertidas para WebP antes de serem salvas, garantindo carregamento
-        rápido na loja.
-      </p>
+      <p className={`mt-0.5 text-sm font-black ${accent ? "text-[#16a34a]" : "text-[#0f172a]"}`}>{value}</p>
     </div>
   );
 }
@@ -481,8 +403,10 @@ function ProcessingInfo() {
 function BankTab({
   catalog,
   loading,
+  error,
   search,
   onSearch,
+  onRetry,
   selected,
   onSelect,
   confirming,
@@ -490,15 +414,17 @@ function BankTab({
 }: {
   catalog: CatalogProduct[];
   loading: boolean;
+  error: string | null;
   search: string;
   onSearch: (q: string) => void;
+  onRetry: () => void;
   selected: CatalogProduct | null;
   onSelect: (p: CatalogProduct) => void;
   confirming: boolean;
   onConfirm: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex flex-col">
       {/* Search */}
       <div className="sticky top-0 z-10 border-b border-[#e2e8f0] bg-white px-6 py-3">
         <div className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
@@ -517,30 +443,34 @@ function BankTab({
         </div>
       </div>
 
-      {/* Selected preview + confirm */}
+      {/* Selected preview + SEO + confirm */}
       {selected && (
         <div className="border-b border-[#e2e8f0] bg-[#f0fdf4] px-6 py-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-start gap-4">
             <img
               src={getProductImageUrl(selected.imageUrl)}
-              alt={selected.name}
-              className="h-16 w-16 rounded-xl object-cover"
+              alt={selected.imageAlt || selected.name}
+              className="h-16 w-16 shrink-0 rounded-xl object-cover"
               onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
             />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 space-y-1">
               <p className="font-black text-[#0f172a] line-clamp-1">{selected.name}</p>
-              <p className="text-xs text-[#64748b]">{selected.category}</p>
+              <p className="text-[11px] text-[#64748b]">{selected.category}{selected.brand ? ` · ${selected.brand}` : ""}</p>
+              {selected.imageAlt && (
+                <div className="flex items-start gap-1.5 rounded-lg bg-white/70 px-2.5 py-1.5">
+                  <span className="mt-px shrink-0 text-[10px]">🔍</span>
+                  <p className="text-[11px] font-semibold text-[#475569] line-clamp-2">
+                    <span className="font-black text-[#16a34a]">SEO:</span> {selected.imageAlt}
+                  </p>
+                </div>
+              )}
             </div>
             <button
               onClick={onConfirm}
               disabled={confirming}
               className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-4 py-2.5 text-sm font-black text-white shadow-md shadow-[#16a34a]/25 disabled:opacity-60"
             >
-              {confirming ? (
-                <RefreshCw size={14} className="animate-spin" />
-              ) : (
-                <CheckCircle2 size={14} />
-              )}
+              {confirming ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
               Usar
             </button>
           </div>
@@ -555,45 +485,70 @@ function BankTab({
               <div key={i} className="aspect-square animate-pulse rounded-2xl bg-[#f1f5f9]" />
             ))}
           </div>
+        ) : error ? (
+          <div className="flex flex-col items-center gap-4 py-12 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-50">
+              <AlertCircle size={26} className="text-red-400" />
+            </div>
+            <div>
+              <p className="font-black text-[#0f172a]">Banco de imagens indisponível</p>
+              <p className="mt-1 text-xs text-[#94a3b8]">{error}</p>
+            </div>
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-black text-[#0f172a] hover:bg-[#f8fafc]"
+            >
+              <RefreshCw size={14} /> Tentar novamente
+            </button>
+          </div>
         ) : catalog.length === 0 ? (
           <div className="py-12 text-center">
             <ImageIcon size={32} className="mx-auto mb-3 text-[#cbd5e1]" />
             <p className="font-black text-[#64748b]">Nenhuma imagem encontrada</p>
-            <p className="mt-1 text-xs text-[#94a3b8]">Tente outro termo de busca</p>
+            <p className="mt-1 text-xs text-[#94a3b8]">
+              {search ? "Tente outro termo de busca" : "A API não retornou imagens para este catálogo"}
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {catalog.map((product) => {
               const isSelected = selected?.id === product.id;
               return (
                 <button
                   key={product.id}
                   onClick={() => onSelect(product)}
-                  className={`group relative aspect-square overflow-hidden rounded-2xl border-2 transition-all ${
+                  className={`group overflow-hidden rounded-2xl border-2 text-left transition-all ${
                     isSelected
                       ? "border-[#16a34a] shadow-md shadow-[#16a34a]/20"
-                      : "border-transparent hover:border-[#16a34a]/40"
-                  }`}
+                      : "border-transparent hover:border-[#16a34a]/40 hover:shadow-sm"
+                  } bg-white`}
                 >
-                  <img
-                    src={getProductImageUrl(product.imageUrl)}
-                    alt={product.name}
-                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                    onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
-                    loading="lazy"
-                  />
-                  {/* Overlay on hover */}
-                  <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 transition-opacity group-hover:opacity-100">
-                    <p className="w-full p-2 text-[10px] font-black text-white line-clamp-2 leading-tight">
-                      {product.name}
-                    </p>
+                  {/* Image */}
+                  <div className="relative aspect-[4/3] overflow-hidden bg-[#f8fafc]">
+                    <img
+                      src={getProductImageUrl(product.imageUrl)}
+                      alt={product.imageAlt || product.name}
+                      className="h-full w-full object-contain transition-transform group-hover:scale-105"
+                      onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                      loading="lazy"
+                    />
+                    {isSelected && (
+                      <div className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#16a34a] shadow">
+                        <CheckCircle2 size={14} className="text-white" />
+                      </div>
+                    )}
                   </div>
-                  {/* Selected checkmark */}
-                  {isSelected && (
-                    <div className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#16a34a] shadow">
-                      <CheckCircle2 size={14} className="text-white" />
-                    </div>
-                  )}
+                  {/* Info */}
+                  <div className="px-2.5 py-2">
+                    <p className="text-[11px] font-black text-[#0f172a] line-clamp-1">{product.name}</p>
+                    {product.imageAlt ? (
+                      <p className="mt-0.5 text-[10px] text-[#94a3b8] line-clamp-2 leading-tight" title={product.imageAlt}>
+                        {product.imageAlt}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-[10px] italic text-[#cbd5e1]">sem alt text</p>
+                    )}
+                  </div>
                 </button>
               );
             })}

@@ -273,8 +273,8 @@ export default function StoreSettingsPage() {
                 Número
               </label>
               <input
-                value={(store as Store & { number?: string }).number ?? ""}
-                onChange={(e) => setStore({ ...store, number: e.target.value } as Store & { number?: string })}
+                value={store.number ?? ""}
+                onChange={(e) => setStore({ ...store, number: e.target.value })}
                 className={inputCls}
                 placeholder="123"
               />
@@ -284,8 +284,8 @@ export default function StoreSettingsPage() {
                 Complemento
               </label>
               <input
-                value={(store as Store & { complement?: string }).complement ?? ""}
-                onChange={(e) => setStore({ ...store, complement: e.target.value } as Store & { complement?: string })}
+                value={store.complement ?? ""}
+                onChange={(e) => setStore({ ...store, complement: e.target.value })}
                 className={inputCls}
                 placeholder="Sala, bloco…"
               />
