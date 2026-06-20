@@ -3,8 +3,10 @@ import { getAuth, getAuthToken, logout } from "./auth";
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
 
+const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.dev";
+
 const IMAGE_BASE_URL: string =
-  import.meta.env.VITE_IMAGE_BASE_URL || GIZ_API_URL;
+  import.meta.env.VITE_IMAGE_BASE_URL || IMAGE_WORKER_URL;
 
 export const DEFAULT_STORE_ID =
   "b5c148b0-a07b-4532-aca3-e66c12f389af";
@@ -365,7 +367,7 @@ export async function uploadProductImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await authFetch(`${GIZ_API_URL}/api/products/upload-image`, {
+  const response = await fetch(`${IMAGE_WORKER_URL}/upload`, {
     method: "POST",
     body: formData,
   });
