@@ -199,6 +199,7 @@ export default function ImagePickerModal({
               onFileChosen={handleFileChosen}
               onReset={resetUpload}
               onConfirm={handleConfirmUpload}
+              onSwitchToUrl={() => setTab("url")}
             />
           ) : tab === "url" ? (
             <UrlTab onConfirm={onConfirm} />
@@ -232,6 +233,7 @@ function UploadTab({
   onFileChosen,
   onReset,
   onConfirm,
+  onSwitchToUrl,
 }: {
   upload: UploadState;
   cameraRef: React.RefObject<HTMLInputElement | null>;
@@ -240,6 +242,7 @@ function UploadTab({
   onFileChosen: (f: File) => void;
   onReset: () => void;
   onConfirm: () => void;
+  onSwitchToUrl: () => void;
 }) {
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -335,21 +338,30 @@ function UploadTab({
       )}
 
       {upload.phase === "error" && (
-        <div className="flex flex-col items-center gap-4 py-10">
+        <div className="flex flex-col items-center gap-4 py-8">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
             <AlertCircle size={28} className="text-red-500" />
           </div>
-          <div className="text-center">
-            <p className="font-black text-[#0f172a]">Algo deu errado</p>
+          <div className="text-center px-4">
+            <p className="font-black text-[#0f172a]">Falha no envio</p>
             <p className="mt-1 text-sm text-[#64748b]">{upload.message}</p>
           </div>
-          <button
-            onClick={onReset}
-            className="flex items-center gap-2 rounded-xl bg-[#0f172a] px-5 py-2.5 text-sm font-black text-white"
-          >
-            <RotateCcw size={14} />
-            Tentar novamente
-          </button>
+          <div className="flex flex-col gap-2 w-full px-6">
+            <button
+              onClick={onReset}
+              className="flex items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-5 py-2.5 text-sm font-black text-[#64748b] hover:bg-[#f8fafc]"
+            >
+              <RotateCcw size={14} />
+              Tentar novamente
+            </button>
+            <button
+              onClick={onSwitchToUrl}
+              className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
+            >
+              <Link size={14} />
+              Usar URL de imagem (alternativa)
+            </button>
+          </div>
         </div>
       )}
     </div>
