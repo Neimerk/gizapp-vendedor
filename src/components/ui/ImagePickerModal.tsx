@@ -10,6 +10,7 @@ import {
   RotateCcw,
   ArrowRight,
   ImageIcon,
+  Link,
 } from "lucide-react";
 
 import {
@@ -27,7 +28,7 @@ import {
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type Tab = "upload" | "bank";
+type Tab = "upload" | "url" | "bank";
 
 type UploadState =
   | { phase: "idle" }
@@ -123,10 +124,11 @@ export default function ImagePickerModal({
       URL.revokeObjectURL(result.previewUrl);
       onConfirm(url);
     } catch (e) {
-      setUpload({
-        phase: "error",
-        message: e instanceof Error ? e.message : "Erro ao enviar imagem.",
-      });
+      const raw = e instanceof Error ? e.message : "Erro ao enviar imagem.";
+      const msg = raw === "Failed to fetch"
+        ? "Servidor indisponível. O serviço pode estar inicializando — aguarde alguns segundos e clique em Tentar novamente."
+        : raw;
+      setUpload({ phase: "error", message: msg });
     }
   }
 
@@ -166,8 +168,9 @@ export default function ImagePickerModal({
         <div className="flex shrink-0 border-b border-[#e2e8f0] px-6">
           {(
             [
-              { key: "upload" as Tab, icon: Camera, label: "Câmera / Upload" },
-              { key: "bank" as Tab, icon: ImageIcon, label: "Banco de imagens" },
+              { key: "upload" as Tab, icon: Camera,     label: "Upload"          },
+              { key: "url"    as Tab, icon: Link,       label: "URL"             },
+              { key: "bank"   as Tab, icon: ImageIcon,  label: "Banco de imagens" },
             ]
           ).map((t) => (
             <button
@@ -197,6 +200,8 @@ export default function ImagePickerModal({
               onReset={resetUpload}
               onConfirm={handleConfirmUpload}
             />
+          ) : tab === "url" ? (
+            <UrlTab onConfirm={onConfirm} />
           ) : (
             <BankTab
               catalog={catalog}
@@ -394,6 +399,78 @@ function StatCell({ label, value, accent }: { label: string; value: string; acce
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wide text-[#94a3b8]">{label}</p>
       <p className={`mt-0.5 text-sm font-black ${accent ? "text-[#16a34a]" : "text-[#0f172a]"}`}>{value}</p>
+    </div>
+  );
+}
+
+// ── URL tab ───────────────────────────────────────────────────────────────────
+
+function UrlTab({ onConfirm }: { onConfirm: (url: string) => void }) {
+  const [url, setUrl] = useState("");
+  const [previewOk, setPreviewOk] = useState<boolean | null>(null);
+
+  const trimmed = url.trim();
+  const isUrl = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+
+  return (
+    <div className="flex flex-col gap-5 p-6">
+      <div>
+        <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+          URL da imagem
+        </label>
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#94a3b8]" />
+            <input
+              type="url"
+              value={url}
+              onChange={e => { setUrl(e.target.value); setPreviewOk(null); }}
+              placeholder="https://exemplo.com/imagem.jpg"
+              className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] py-3 pl-9 pr-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20 placeholder:text-[#cbd5e1]"
+            />
+          </div>
+        </div>
+        <p className="mt-1.5 text-[10px] text-[#94a3b8]">
+          Cole o link direto de qualquer imagem pública (JPG, PNG, WebP…)
+        </p>
+      </div>
+
+      {/* Preview */}
+      {isUrl && (
+        <div className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-[#f8fafc]">
+          {previewOk === false ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <AlertCircle size={24} className="text-red-400" />
+              <p className="text-sm font-semibold text-[#64748b]">Imagem não carregou</p>
+              <p className="text-xs text-[#94a3b8]">Verifique se a URL é pública e aponta para uma imagem</p>
+            </div>
+          ) : (
+            <img
+              src={trimmed}
+              alt="Prévia"
+              className="mx-auto block max-h-56 w-full object-contain"
+              onLoad={() => setPreviewOk(true)}
+              onError={() => setPreviewOk(false)}
+            />
+          )}
+        </div>
+      )}
+
+      {!isUrl && (
+        <div className="flex flex-col items-center gap-3 py-8 text-center text-[#94a3b8]">
+          <Link size={28} className="opacity-30" />
+          <p className="text-sm">Cole uma URL acima para pré-visualizar</p>
+        </div>
+      )}
+
+      <button
+        onClick={() => onConfirm(trimmed)}
+        disabled={!isUrl || previewOk === false}
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 disabled:opacity-40"
+      >
+        <CheckCircle2 size={16} />
+        Usar esta imagem
+      </button>
     </div>
   );
 }
