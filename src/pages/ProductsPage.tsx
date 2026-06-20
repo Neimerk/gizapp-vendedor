@@ -9,6 +9,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Tag,
+  Star,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -21,6 +22,7 @@ import {
   removeStoreProduct,
   removeProductFromShopping,
   syncProductToShopping,
+  toggleFeaturedInShopping,
   updateStoreProduct,
   updateStoreProductImage,
   type StoreProduct,
@@ -37,6 +39,7 @@ import ImagePickerModal from "../components/ui/ImagePickerModal";
 type LocalProduct = StoreProduct & {
   _modified: boolean;
   _imageAlt: string;
+  _featured: boolean;
 };
 
 type NewProductForm = {
@@ -68,7 +71,7 @@ const EMPTY_FORM: NewProductForm = {
 const PAGE_SIZE = 20;
 
 function toLocal(p: StoreProduct): LocalProduct {
-  return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "" };
+  return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -198,6 +201,23 @@ export default function ProductsPage() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  // ── Featured ───────────────────────────────────────────────────────────────
+
+  const MAX_FEATURED = 3;
+  const featuredCount = products.filter(p => p._featured).length;
+
+  async function handleToggleFeatured(product: LocalProduct) {
+    const isNowFeatured = !product._featured;
+    if (isNowFeatured && featuredCount >= MAX_FEATURED) {
+      showError(`Máximo de ${MAX_FEATURED} produtos em destaque por loja (plano básico).`);
+      return;
+    }
+    setProducts(cur =>
+      cur.map(p => p.id === product.id ? { ...p, _featured: isNowFeatured } : p)
+    );
+    toggleFeaturedInShopping(product.slug, isNowFeatured);
   }
 
   // ── Image ──────────────────────────────────────────────────────────────────
@@ -343,6 +363,10 @@ export default function ProductsPage() {
                 {modifiedCount} não salvo{modifiedCount !== 1 ? "s" : ""}
               </span>
             )}
+            <span className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-black text-yellow-600 ring-1 ring-yellow-200">
+              <Star size={10} />
+              {featuredCount}/{MAX_FEATURED} destaque{featuredCount !== 1 ? "s" : ""}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -401,11 +425,13 @@ export default function ProductsPage() {
                 product={product}
                 saving={savingId === product.id}
                 savingImage={savingImageId === product.id}
+                canFeatured={!product._featured && featuredCount < MAX_FEATURED}
                 onPatch={(changes) => patch(product.id, changes)}
                 onAdjustStock={(d) => adjustStock(product.id, d)}
                 onSave={() => handleSave(product)}
                 onDelete={() => setDeleteTarget(product)}
                 onOpenImagePicker={() => setImagePickerProduct(product)}
+                onToggleFeatured={() => handleToggleFeatured(product)}
               />
             ))}
           </div>
@@ -493,20 +519,24 @@ function ProductCard({
   product,
   saving,
   savingImage,
+  canFeatured,
   onPatch,
   onAdjustStock,
   onSave,
   onDelete,
   onOpenImagePicker,
+  onToggleFeatured,
 }: {
   product: LocalProduct;
   saving: boolean;
   savingImage: boolean;
+  canFeatured: boolean;
   onPatch: (changes: Partial<LocalProduct>) => void;
   onAdjustStock: (delta: number) => void;
   onSave: () => void;
   onDelete: () => void;
   onOpenImagePicker: () => void;
+  onToggleFeatured: () => void;
 }) {
   return (
     <div className={`overflow-hidden rounded-3xl border bg-white shadow-sm transition-all ${
@@ -545,20 +575,40 @@ function ProductCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h3 className="truncate font-black text-[#0f172a] leading-tight" title={product.name}>
-                {product.name}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="truncate font-black text-[#0f172a] leading-tight" title={product.name}>
+                  {product.name}
+                </h3>
+                {product._featured && (
+                  <Star size={13} className="shrink-0 fill-yellow-400 text-yellow-400" />
+                )}
+              </div>
               <p className="mt-0.5 truncate text-xs text-[#64748b]">
                 {product.category}{product.brand ? ` · ${product.brand}` : ""}
               </p>
             </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black ${
-              product.available
-                ? "bg-[#f0fdf4] text-[#16a34a] ring-1 ring-[#16a34a]/20"
-                : "bg-red-50 text-red-600 ring-1 ring-red-200"
-            }`}>
-              {product.available ? "Disponível" : "Indisponível"}
-            </span>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleFeatured}
+                disabled={!product._featured && !canFeatured}
+                title={product._featured ? "Remover do destaque" : "Marcar como destaque"}
+                className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors disabled:opacity-30 ${
+                  product._featured
+                    ? "bg-yellow-100 text-yellow-500 hover:bg-yellow-200"
+                    : "bg-[#f1f5f9] text-[#94a3b8] hover:bg-yellow-50 hover:text-yellow-400"
+                }`}
+              >
+                <Star size={13} className={product._featured ? "fill-yellow-400" : ""} />
+              </button>
+              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
+                product.available
+                  ? "bg-[#f0fdf4] text-[#16a34a] ring-1 ring-[#16a34a]/20"
+                  : "bg-red-50 text-red-600 ring-1 ring-red-200"
+              }`}>
+                {product.available ? "Disponível" : "Indisponível"}
+              </span>
+            </div>
           </div>
 
           {/* Fields grid */}

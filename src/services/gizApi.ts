@@ -325,6 +325,14 @@ export async function removeProductFromShopping(slug: string): Promise<void> {
   }).catch(() => {});
 }
 
+export async function toggleFeaturedInShopping(slug: string, featured: boolean): Promise<void> {
+  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}/featured`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ featured }),
+  }).catch(() => {});
+}
+
 export async function getWorkerImages(search = ""): Promise<CatalogProduct[]> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
