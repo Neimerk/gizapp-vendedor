@@ -202,8 +202,8 @@ export default function ImagePickerModal({
           ))}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Content — bank tab gerencia seu próprio scroll interno */}
+        <div className={`flex-1 ${tab === "bank" ? "overflow-hidden" : "overflow-y-auto"}`}>
           {tab === "upload" ? (
             <UploadTab
               upload={upload}
@@ -527,9 +527,9 @@ function BankTab({
   onConfirm: () => void;
 }) {
   return (
-    <div className="flex flex-col">
-      {/* Search */}
-      <div className="sticky top-0 z-10 border-b border-[#e2e8f0] bg-white px-6 py-3">
+    <div className="flex h-full flex-col">
+      {/* Search — fixo no topo */}
+      <div className="shrink-0 border-b border-[#e2e8f0] bg-white px-6 py-3">
         <div className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
           <Search size={14} className="shrink-0 text-[#94a3b8]" />
           <input
@@ -546,42 +546,8 @@ function BankTab({
         </div>
       </div>
 
-      {/* Selected preview + SEO + confirm */}
-      {selected && (
-        <div className="border-b border-[#e2e8f0] bg-[#f0fdf4] px-6 py-4">
-          <div className="flex items-start gap-4">
-            <img
-              src={getProductImageUrl(selected.imageUrl)}
-              alt={selected.imageAlt || selected.name}
-              className="h-16 w-16 shrink-0 rounded-xl object-cover"
-              onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
-            />
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="font-black text-[#0f172a] line-clamp-1">{selected.name}</p>
-              <p className="text-[11px] text-[#64748b]">{selected.category}{selected.brand ? ` · ${selected.brand}` : ""}</p>
-              {selected.imageAlt && (
-                <div className="flex items-start gap-1.5 rounded-lg bg-white/70 px-2.5 py-1.5">
-                  <span className="mt-px shrink-0 text-[10px]">🔍</span>
-                  <p className="text-[11px] font-semibold text-[#475569] line-clamp-2">
-                    <span className="font-black text-[#16a34a]">SEO:</span> {selected.imageAlt}
-                  </p>
-                </div>
-              )}
-            </div>
-            <button
-              onClick={onConfirm}
-              disabled={confirming}
-              className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-4 py-2.5 text-sm font-black text-white shadow-md shadow-[#16a34a]/25 disabled:opacity-60"
-            >
-              {confirming ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-              Usar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Grid */}
-      <div className="p-4">
+      {/* Grid — área scrollável no meio */}
+      <div className="flex-1 overflow-y-auto p-4">
         {loading ? (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {Array.from({ length: 12 }).map((_, i) => (
@@ -658,6 +624,36 @@ function BankTab({
           </div>
         )}
       </div>
+
+      {/* Footer fixo — aparece logo acima do teclado/borda, onde o usuário está */}
+      {selected && (
+        <div className="shrink-0 border-t-2 border-[#16a34a]/20 bg-[#f0fdf4] px-4 py-3">
+          <div className="flex items-center gap-3">
+            <img
+              src={getProductImageUrl(selected.imageUrl)}
+              alt={selected.imageAlt || selected.name}
+              className="h-12 w-12 shrink-0 rounded-xl object-cover"
+              onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black text-[#0f172a]">{selected.name}</p>
+              {selected.imageAlt && (
+                <p className="truncate text-[10px] text-[#16a34a]">
+                  🔍 {selected.imageAlt}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={onConfirm}
+              disabled={confirming}
+              className="flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-[#16a34a]/30 disabled:opacity-60"
+            >
+              {confirming ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+              Usar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
