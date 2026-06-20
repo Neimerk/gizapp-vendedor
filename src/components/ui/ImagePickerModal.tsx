@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import {
+  getCatalogProducts,
   getWorkerImages,
   uploadProductImage,
   getProductImageUrl,
@@ -91,11 +92,24 @@ export default function ImagePickerModal({
     setCatalogLoading(true);
     setCatalogError(null);
     try {
-      const items = await getWorkerImages(q);
-      setCatalog(items);
-    } catch (e) {
-      setCatalogError(e instanceof Error ? e.message : "Erro ao carregar banco de imagens.");
-      setCatalog([]);
+      // Tenta catálogo da API primeiro (1100+ produtos com imagens)
+      const items = await getCatalogProducts(q);
+      const withImages = items.filter((p) => p.imageUrl);
+      if (withImages.length > 0) {
+        setCatalog(withImages);
+      } else {
+        // Fallback: imagens do R2 (uploads do usuário)
+        const workerItems = await getWorkerImages(q);
+        setCatalog(workerItems);
+      }
+    } catch {
+      try {
+        const workerItems = await getWorkerImages(q);
+        setCatalog(workerItems);
+      } catch (e2) {
+        setCatalogError(e2 instanceof Error ? e2.message : "Erro ao carregar banco de imagens.");
+        setCatalog([]);
+      }
     } finally {
       setCatalogLoading(false);
     }
