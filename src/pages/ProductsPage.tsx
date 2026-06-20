@@ -217,6 +217,8 @@ export default function ProductsPage() {
   async function handleAddProduct(form: NewProductForm) {
     try {
       setAdding(true);
+
+      // 1. Cria produto no catálogo global
       const catalogProduct = await createProduct({
         name: form.name.trim(),
         category: form.category,
@@ -225,14 +227,29 @@ export default function ProductsPage() {
         imageUrl: form.imageUrl || undefined,
         imageAlt: form.imageAlt.trim() || undefined,
       });
-      const storeProduct = await addProductFromCatalog(catalogProduct.id);
-      await updateStoreProduct(storeProduct.id, {
-        price: parseFloat(form.price) || 0,
-        promotionalPrice: form.promotionalPrice ? parseFloat(form.promotionalPrice) : null,
-        stock: parseInt(form.stock) || 0,
-        available: form.available,
-        imageAlt: form.imageAlt.trim() || undefined,
-      });
+
+      // 2. Adiciona à loja (retorna só mensagem, sem o objeto)
+      await addProductFromCatalog(catalogProduct.id);
+
+      // 3. Busca o store product recém-criado pelo productId
+      const allStoreProducts = await getStoreProducts();
+      const newSP = allStoreProducts.find(p => p.productId === catalogProduct.id);
+
+      if (newSP) {
+        // 4. Atualiza preço, estoque e disponibilidade
+        await updateStoreProduct(newSP.id, {
+          price: parseFloat(form.price) || 0,
+          promotionalPrice: form.promotionalPrice ? parseFloat(form.promotionalPrice) : null,
+          stock: parseInt(form.stock) || 0,
+          available: form.available,
+          imageAlt: form.imageAlt.trim() || undefined,
+        });
+        // 5. Atualiza imagem do store product se o usuário selecionou uma
+        if (form.imageUrl) {
+          await updateStoreProductImage(newSP.id, form.imageUrl);
+        }
+      }
+
       await loadProducts();
       setAddModalOpen(false);
     } catch (e) {
