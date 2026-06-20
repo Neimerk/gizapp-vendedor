@@ -203,7 +203,7 @@ export default function ImagePickerModal({
         </div>
 
         {/* Content — bank tab gerencia seu próprio scroll interno */}
-        <div className={`flex-1 ${tab === "bank" ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <div className={`min-h-0 flex-1 ${tab === "bank" ? "flex flex-col overflow-hidden" : "overflow-y-auto"}`}>
           {tab === "upload" ? (
             <UploadTab
               upload={upload}
@@ -527,7 +527,7 @@ function BankTab({
   onConfirm: () => void;
 }) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Search — fixo no topo */}
       <div className="shrink-0 border-b border-[#e2e8f0] bg-white px-6 py-3">
         <div className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2.5">
