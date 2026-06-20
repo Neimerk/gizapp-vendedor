@@ -71,6 +71,10 @@ const EMPTY_FORM: NewProductForm = {
 
 const PAGE_SIZE = 20;
 
+const PLAN_LIMITS = { free: 5, basic: 15, premium: 30 } as const;
+const STORE_PLAN: keyof typeof PLAN_LIMITS = "basic"; // atualizar quando planos forem gerenciados
+const MAX_PRODUCTS = PLAN_LIMITS[STORE_PLAN];
+
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
 }
@@ -257,6 +261,10 @@ export default function ProductsPage() {
   // ── Add product ────────────────────────────────────────────────────────────
 
   async function handleAddProduct(form: NewProductForm) {
+    if (products.length >= MAX_PRODUCTS) {
+      showError(`Limite do plano ${STORE_PLAN}: máximo ${MAX_PRODUCTS} produtos.`);
+      return;
+    }
     try {
       setAdding(true);
 
@@ -356,7 +364,7 @@ export default function ProductsPage() {
           <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Produtos</h1>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="text-sm text-[#64748b]">
-              {products.filter(p => p.available).length} ativo{products.filter(p => p.available).length !== 1 ? "s" : ""} na loja
+              {products.length}/{MAX_PRODUCTS} produto{products.length !== 1 ? "s" : ""} · plano {STORE_PLAN}
             </span>
             {unavailableCount > 0 && (
               <button
@@ -392,8 +400,18 @@ export default function ProductsPage() {
           )}
           <button
             type="button"
-            onClick={() => setAddModalOpen(true)}
-            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25"
+            onClick={() => {
+              if (products.length >= MAX_PRODUCTS) {
+                showError(`Limite do plano ${STORE_PLAN}: máximo ${MAX_PRODUCTS} produtos. Faça upgrade para adicionar mais.`);
+                return;
+              }
+              setAddModalOpen(true);
+            }}
+            className={`flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg ${
+              products.length >= MAX_PRODUCTS
+                ? "bg-[#94a3b8] shadow-gray-200 cursor-not-allowed"
+                : "bg-gradient-to-r from-[#16a34a] to-[#15803d] shadow-[#16a34a]/25"
+            }`}
           >
             <PackagePlus size={18} />
             Adicionar produto
