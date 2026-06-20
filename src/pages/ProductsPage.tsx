@@ -19,6 +19,8 @@ import {
   getProductImageUrl,
   getStoreProducts,
   removeStoreProduct,
+  removeProductFromShopping,
+  syncProductToShopping,
   updateStoreProduct,
   updateStoreProductImage,
   type StoreProduct,
@@ -148,6 +150,15 @@ export default function ProductsPage() {
       setProducts(cur =>
         cur.map(p => p.id === product.id ? { ...p, _modified: false } : p)
       );
+      // Sincroniza alterações com o Shopping app
+      syncProductToShopping({
+        name: product.name, slug: product.slug, category: product.category,
+        subCategory: product.subCategory, brand: product.brand,
+        description: product.description, imageUrl: product.imageUrl,
+        imageAlt: product._imageAlt || null,
+        price: product.price, promotionalPrice: product.promotionalPrice ?? null,
+        stock: product.stock, available: product.available,
+      });
     } catch (e) {
       console.error(e);
       showError("Erro ao salvar produto.");
@@ -179,6 +190,7 @@ export default function ProductsPage() {
       setDeleting(true);
       await removeStoreProduct(deleteTarget.id);
       setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
+      removeProductFromShopping(deleteTarget.slug);
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
@@ -236,18 +248,31 @@ export default function ProductsPage() {
       const newSP = allStoreProducts.find(p => p.productId === catalogProduct.id);
 
       if (newSP) {
+        const price = parseFloat(form.price) || 0;
+        const promoPrice = form.promotionalPrice ? parseFloat(form.promotionalPrice) : null;
+        const stock = parseInt(form.stock) || 0;
+
         // 4. Atualiza preço, estoque e disponibilidade
         await updateStoreProduct(newSP.id, {
-          price: parseFloat(form.price) || 0,
-          promotionalPrice: form.promotionalPrice ? parseFloat(form.promotionalPrice) : null,
-          stock: parseInt(form.stock) || 0,
-          available: form.available,
+          price, promotionalPrice: promoPrice,
+          stock, available: form.available,
           imageAlt: form.imageAlt.trim() || undefined,
         });
         // 5. Atualiza imagem do store product se o usuário selecionou uma
         if (form.imageUrl) {
           await updateStoreProductImage(newSP.id, form.imageUrl);
         }
+        // 6. Sincroniza imediatamente com o Shopping app
+        syncProductToShopping({
+          name: form.name.trim(), slug: catalogProduct.slug,
+          category: form.category, subCategory: null,
+          brand: form.brand.trim() || null,
+          description: form.description.trim() || null,
+          imageUrl: form.imageUrl || null,
+          imageAlt: form.imageAlt.trim() || null,
+          price, promotionalPrice: promoPrice,
+          stock, available: form.available,
+        });
       }
 
       await loadProducts();

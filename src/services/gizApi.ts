@@ -305,6 +305,26 @@ export type CatalogProductsResponse = {
   totalPages: number;
 };
 
+export async function syncProductToShopping(product: {
+  name: string; slug: string; category: string;
+  subCategory?: string | null; brand?: string | null;
+  description?: string | null; imageUrl?: string | null;
+  imageAlt?: string | null; price: number;
+  promotionalPrice?: number | null; stock: number; available: boolean;
+}): Promise<void> {
+  await fetch(`${IMAGE_WORKER_URL}/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(product),
+  }).catch(() => {}); // silencioso — não bloqueia o fluxo principal
+}
+
+export async function removeProductFromShopping(slug: string): Promise<void> {
+  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+  }).catch(() => {});
+}
+
 export async function getWorkerImages(search = ""): Promise<CatalogProduct[]> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
