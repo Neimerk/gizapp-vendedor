@@ -305,6 +305,20 @@ export type CatalogProductsResponse = {
   totalPages: number;
 };
 
+export async function getWorkerImages(search = ""): Promise<CatalogProduct[]> {
+  const params = new URLSearchParams();
+  if (search.trim()) params.set("search", search.trim());
+
+  const response = await fetch(`${IMAGE_WORKER_URL}/images?${params}`, {
+    cache: "no-store",
+  });
+
+  if (!response.ok) throw new Error("Erro ao carregar banco de imagens.");
+
+  const data = await response.json() as { items: CatalogProduct[] };
+  return data.items.filter((p) => p.imageUrl);
+}
+
 export async function getCatalogProducts(search = ""): Promise<CatalogProduct[]> {
   const params = new URLSearchParams({
     page: "1",

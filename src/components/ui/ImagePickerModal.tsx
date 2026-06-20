@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import {
-  getCatalogProducts,
+  getWorkerImages,
   uploadProductImage,
   getProductImageUrl,
   type CatalogProduct,
@@ -91,8 +91,8 @@ export default function ImagePickerModal({
     setCatalogLoading(true);
     setCatalogError(null);
     try {
-      const items = await getCatalogProducts(q);
-      setCatalog(items.filter((p) => p.imageUrl));
+      const items = await getWorkerImages(q);
+      setCatalog(items);
     } catch (e) {
       setCatalogError(e instanceof Error ? e.message : "Erro ao carregar banco de imagens.");
       setCatalog([]);
