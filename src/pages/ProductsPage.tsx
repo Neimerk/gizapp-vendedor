@@ -17,6 +17,7 @@ import {
   addProductFromCatalog,
   clearStoreProducts,
   createProduct,
+  getFeaturedSlugs,
   getProductImageUrl,
   getStoreProducts,
   removeStoreProduct,
@@ -109,8 +110,17 @@ export default function ProductsPage() {
   async function loadProducts() {
     try {
       setLoading(true);
-      const data = await getStoreProducts();
-      setProducts(data.filter(p => p.available).map(toLocal));
+      const [data, featuredSlugs] = await Promise.all([
+        getStoreProducts(),
+        getFeaturedSlugs(),
+      ]);
+      const slugSet = new Set(featuredSlugs);
+      setProducts(
+        data.filter(p => p.available).map(p => ({
+          ...toLocal(p),
+          _featured: slugSet.has(p.slug),
+        }))
+      );
     } catch (e) {
       console.error(e);
     } finally {
