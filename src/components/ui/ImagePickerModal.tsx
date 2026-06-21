@@ -41,6 +41,7 @@ type UploadState =
 type Props = {
   productName: string;
   currentImageUrl?: string;
+  defaultTab?: Tab;
   onConfirm: (imageUrl: string, imageAlt?: string) => void;
   onClose: () => void;
 };
@@ -50,10 +51,11 @@ type Props = {
 export default function ImagePickerModal({
   productName,
   currentImageUrl,
+  defaultTab = "upload",
   onConfirm,
   onClose,
 }: Props) {
-  const [tab, setTab] = useState<Tab>("upload");
+  const [tab, setTab] = useState<Tab>(defaultTab);
 
   // upload tab
   const [upload, setUpload] = useState<UploadState>({ phase: "idle" });

@@ -10,6 +10,9 @@ import {
   CheckCircle2,
   Tag,
   Star,
+  Upload,
+  Link,
+  ImageIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -847,9 +850,15 @@ function AddProductModal({
 }) {
   const [form, setForm] = useState<NewProductForm>(EMPTY_FORM);
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
+  const [imagePickerTab, setImagePickerTab] = useState<"upload" | "url" | "bank">("upload");
 
   function patch(changes: Partial<NewProductForm>) {
     setForm(f => ({ ...f, ...changes }));
+  }
+
+  function openPicker(tab: "upload" | "url" | "bank") {
+    setImagePickerTab(tab);
+    setImagePickerOpen(true);
   }
 
   const canSubmit = form.name.trim().length > 0 && form.category !== "";
@@ -862,7 +871,7 @@ function AddProductModal({
           <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] px-6 py-4">
             <div>
               <h2 className="text-base font-black text-[#0f172a]">Novo produto</h2>
-              <p className="mt-0.5 text-xs text-[#94a3b8]">Preencha os dados do produto</p>
+              <p className="mt-0.5 text-xs text-[#94a3b8]">Preencha os dados e escolha a imagem</p>
             </div>
             <button
               onClick={onClose}
@@ -874,40 +883,83 @@ function AddProductModal({
 
           {/* Content */}
           <div className="flex-1 space-y-4 overflow-y-auto p-6">
-            {/* Image picker area */}
+            {/* Imagem — 3 opções sempre visíveis */}
             <div>
-              <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
                 Imagem do produto
               </label>
-              <button
-                type="button"
-                onClick={() => setImagePickerOpen(true)}
-                className={`relative flex h-36 w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-colors ${
-                  form.imageUrl
-                    ? "border-[#16a34a]/30 bg-[#f8fafc]"
-                    : "border-[#e2e8f0] bg-[#f8fafc] hover:border-[#16a34a]/40 hover:bg-[#f0fdf4]"
-                }`}
-              >
-                {form.imageUrl ? (
-                  <>
-                    <img
-                      src={getProductImageUrl(form.imageUrl)}
-                      alt={form.name || "produto"}
-                      className="h-full w-full object-contain"
-                      onError={e => { e.currentTarget.src = "/placeholder.png"; }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100 rounded-2xl">
-                      <span className="rounded-xl bg-white px-3 py-1.5 text-xs font-black text-[#0f172a]">Trocar imagem</span>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-[#94a3b8]">
-                    <ImagePlus size={28} />
-                    <span className="text-xs font-semibold text-[#64748b]">Adicionar imagem</span>
-                    <span className="text-[10px] text-[#cbd5e1]">Upload próprio ou banco de imagens da API</span>
+
+              {form.imageUrl ? (
+                /* Preview da imagem selecionada */
+                <div className="relative overflow-hidden rounded-2xl border border-[#16a34a]/30 bg-[#f8fafc]">
+                  <img
+                    src={getProductImageUrl(form.imageUrl)}
+                    alt={form.name || "produto"}
+                    className="mx-auto block h-36 w-full object-contain"
+                    onError={e => { e.currentTarget.src = "/placeholder.png"; }}
+                  />
+                  {/* Trocar imagem — 3 opções sobrepostas ao hover */}
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity hover:opacity-100 rounded-2xl">
+                    <button type="button" onClick={() => openPicker("upload")}
+                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-[#0f172a]">
+                      <Upload size={12} /> Upload
+                    </button>
+                    <button type="button" onClick={() => openPicker("bank")}
+                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-[#0f172a]">
+                      <ImageIcon size={12} /> Banco
+                    </button>
+                    <button type="button" onClick={() => openPicker("url")}
+                      className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-2 text-[11px] font-black text-[#0f172a]">
+                      <Link size={12} /> URL
+                    </button>
                   </div>
-                )}
-              </button>
+                </div>
+              ) : (
+                /* 3 opções lado a lado */
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openPicker("upload")}
+                    className="flex flex-col items-center gap-2.5 rounded-2xl border-2 border-dashed border-[#16a34a]/30 bg-[#f0fdf4] px-3 py-5 text-center transition-all hover:border-[#16a34a] hover:bg-[#dcfce7] active:scale-[0.98]"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#16a34a]">
+                      <Upload size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-[#0f172a]">Upload</p>
+                      <p className="mt-0.5 text-[10px] leading-tight text-[#64748b]">Foto ou arquivo do dispositivo</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openPicker("bank")}
+                    className="flex flex-col items-center gap-2.5 rounded-2xl border-2 border-dashed border-[#3b82f6]/30 bg-[#eff6ff] px-3 py-5 text-center transition-all hover:border-[#3b82f6] hover:bg-[#dbeafe] active:scale-[0.98]"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#3b82f6]">
+                      <ImageIcon size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-[#0f172a]">Banco GizApp</p>
+                      <p className="mt-0.5 text-[10px] leading-tight text-[#64748b]">+1.200 imagens de produtos</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openPicker("url")}
+                    className="flex flex-col items-center gap-2.5 rounded-2xl border-2 border-dashed border-[#8b5cf6]/30 bg-[#f5f3ff] px-3 py-5 text-center transition-all hover:border-[#8b5cf6] hover:bg-[#ede9fe] active:scale-[0.98]"
+                  >
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#8b5cf6]">
+                      <Link size={20} className="text-white" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-[#0f172a]">URL</p>
+                      <p className="mt-0.5 text-[10px] leading-tight text-[#64748b]">Cole o link de uma imagem</p>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Name */}
@@ -1094,6 +1146,7 @@ function AddProductModal({
         <ImagePickerModal
           productName={form.name || "Novo produto"}
           currentImageUrl={form.imageUrl}
+          defaultTab={imagePickerTab}
           onConfirm={(url, alt) => { patch({ imageUrl: url, ...(alt ? { imageAlt: alt } : {}) }); setImagePickerOpen(false); }}
           onClose={() => setImagePickerOpen(false)}
         />
