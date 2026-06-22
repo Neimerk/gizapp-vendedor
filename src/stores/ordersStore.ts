@@ -81,6 +81,7 @@ export const useOrdersStore = create<OrdersState>((set) => ({
   teardownSignalR: () => {
     ordersConnection.off("OrderCreated");
     ordersConnection.off("OrderStatusUpdated");
+    ordersConnection.stop();
   },
 
   dismissToast: () => set({ toastVisible: false }),
