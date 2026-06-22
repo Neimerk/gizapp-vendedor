@@ -18,7 +18,6 @@ import {
   getWorkerImages,
   uploadProductImage,
   getProductImageUrl,
-  IMAGE_WORKER_URL,
   type CatalogProduct,
 } from "../../services/gizApi";
 import {
@@ -106,11 +105,11 @@ export default function ImagePickerModal({
       const workerItems =
         workerResult.status === "fulfilled" ? workerResult.value : [];
 
-      // Só inclui itens do catálogo cujo imageUrl aponta para o worker (imagens hospedadas por nós).
-      // Itens com URLs de CDNs externos ou paths relativos são excluídos para evitar cards vazios.
+      // Inclui itens do catálogo com qualquer URL absoluta (worker ou gizapp-api).
+      // Exclui apenas paths relativos que não resolvem para uma imagem válida.
       const catalogItems =
         catalogResult.status === "fulfilled"
-          ? catalogResult.value.filter((p) => p.imageUrl?.startsWith(IMAGE_WORKER_URL))
+          ? catalogResult.value.filter((p) => p.imageUrl?.startsWith("http"))
           : [];
 
       // Merge sem duplicatas (por imageUrl)
