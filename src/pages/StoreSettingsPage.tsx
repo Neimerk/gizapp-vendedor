@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Loader2, MapPin, Store as StoreIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { AlertCircle, CheckCircle2, ImageIcon, Loader2, MapPin, Store as StoreIcon, Upload, X } from "lucide-react";
 
 import {
   getStoreById,
   updateStore,
+  uploadProductImage,
   type Store,
 } from "../services/gizApi";
 import { getAuth } from "../services/auth";
@@ -20,6 +21,9 @@ export default function StoreSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   // selected product-type slugs (persisted in store.category as "slug1,slug2,…")
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
@@ -74,6 +78,22 @@ export default function StoreSettingsPage() {
     }
   }
 
+  async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !store) return;
+    setBannerUploadError(null);
+    try {
+      setBannerUploading(true);
+      const url = await uploadProductImage(file);
+      setStore({ ...store, bannerUrl: url });
+    } catch (err) {
+      setBannerUploadError(err instanceof Error ? err.message : "Erro ao enviar banner.");
+    } finally {
+      setBannerUploading(false);
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  }
+
   async function handleSave() {
     if (!store) return;
     setSaveError(null);
@@ -107,6 +127,103 @@ export default function StoreSettingsPage() {
       <div>
         <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Operação Comercial</p>
         <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Minha Loja</h1>
+      </div>
+
+      {/* Aparência no Shopping */}
+      <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="mb-5 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#f59e0b]/10">
+            <ImageIcon size={16} className="text-[#f59e0b]" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-[#0f172a]">Aparência no BrasUX Shopping</h2>
+            <p className="text-xs text-[#64748b]">Como sua loja aparece para os clientes no app</p>
+          </div>
+        </div>
+
+        {/* Banner */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Banner da loja
+            </label>
+            <span className="text-[10px] text-[#94a3b8]">Recomendado: 1200 × 400 px</span>
+          </div>
+
+          <div
+            className="group relative cursor-pointer overflow-hidden rounded-2xl"
+            style={{ aspectRatio: "3 / 1" }}
+            onClick={() => !store.bannerUrl && !bannerUploading && bannerInputRef.current?.click()}
+          >
+            {store.bannerUrl ? (
+              <img
+                src={store.bannerUrl}
+                alt="Banner da loja"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div
+                className="flex h-full w-full flex-col items-center justify-center gap-2 select-none"
+                style={{
+                  background: "linear-gradient(135deg, #0f172a 0%, #14532d 55%, #16a34a 100%)",
+                }}
+              >
+                <p className="text-2xl font-black tracking-tight text-white drop-shadow-lg px-6 text-center">
+                  {store.name}
+                </p>
+                <p className="text-[11px] font-semibold text-white/40">
+                  Clique para adicionar seu banner
+                </p>
+              </div>
+            )}
+
+            {/* Overlay de ações */}
+            <div className="absolute inset-0 flex items-center justify-center gap-3 bg-black/0 transition-all duration-200 group-hover:bg-black/45">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); bannerInputRef.current?.click(); }}
+                disabled={bannerUploading}
+                className="flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-xs font-black text-[#0f172a] opacity-0 shadow-lg transition-all group-hover:opacity-100 hover:bg-white disabled:opacity-50"
+              >
+                {bannerUploading
+                  ? <><Loader2 size={13} className="animate-spin" /> Enviando…</>
+                  : <><Upload size={13} /> {store.bannerUrl ? "Trocar banner" : "Adicionar banner"}</>
+                }
+              </button>
+              {store.bannerUrl && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setStore({ ...store, bannerUrl: undefined }); }}
+                  disabled={bannerUploading}
+                  className="flex items-center gap-2 rounded-xl bg-red-500/90 px-4 py-2.5 text-xs font-black text-white opacity-0 shadow-lg transition-all group-hover:opacity-100 hover:bg-red-500 disabled:opacity-50"
+                >
+                  <X size={13} /> Remover
+                </button>
+              )}
+            </div>
+          </div>
+
+          <input
+            ref={bannerInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleBannerUpload}
+          />
+
+          {bannerUploadError && (
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+              <AlertCircle size={13} className="shrink-0 text-red-500" />
+              <p className="text-xs font-semibold text-red-700">{bannerUploadError}</p>
+            </div>
+          )}
+
+          <p className="mt-2 text-[11px] text-[#94a3b8]">
+            {store.bannerUrl
+              ? "Passe o mouse sobre o banner para trocar ou remover."
+              : "Sem banner personalizado — o nome da loja é exibido automaticamente."}
+          </p>
+        </div>
       </div>
 
       {/* Basic info */}
