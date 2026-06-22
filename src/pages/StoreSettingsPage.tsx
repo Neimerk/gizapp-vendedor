@@ -14,6 +14,15 @@ import { categoryIcons } from "../data/categoryIcons";
 const inputCls =
   "w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30 placeholder:text-[#cbd5e1]";
 
+function formatDocument(digits: string): string {
+  const d = digits.replace(/\D/g, "");
+  if (d.length === 11)
+    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  if (d.length === 14)
+    return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+  return digits;
+}
+
 export default function StoreSettingsPage() {
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
@@ -234,6 +243,25 @@ export default function StoreSettingsPage() {
           </div>
           <h2 className="text-base font-black text-[#0f172a]">Informações básicas</h2>
         </div>
+
+        {/* CPF/CNPJ do responsável — somente leitura */}
+        {(() => {
+          const auth = getAuth();
+          const doc = auth?.cpf ? formatDocument(auth.cpf) : null;
+          const label = auth?.cpf?.replace(/\D/g, "").length === 14 ? "CNPJ" : "CPF";
+          if (!doc) return null;
+          return (
+            <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">{label} do responsável</p>
+                <p className="mt-0.5 font-black text-[#0f172a]">{doc}</p>
+              </div>
+              <span className="shrink-0 rounded-full bg-[#f0fdf4] px-2.5 py-1 text-[10px] font-black text-[#16a34a] ring-1 ring-[#16a34a]/20">
+                Verificado
+              </span>
+            </div>
+          );
+        })()}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>

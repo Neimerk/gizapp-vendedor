@@ -7,6 +7,7 @@ export type AuthUser = {
   role: "Admin" | "Customer" | "Seller" | "Courier";
   storeId?: string | null;
   plan?: "free" | "basic" | "premium";
+  cpf?: string | null;
   token: string;
 };
 
