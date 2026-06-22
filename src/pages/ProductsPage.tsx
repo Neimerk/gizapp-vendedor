@@ -76,7 +76,8 @@ const EMPTY_FORM: NewProductForm = {
 
 const PAGE_SIZE = 20;
 
-const PLAN_LIMITS = { free: 30, basic: 100, premium: 300 } as const;
+const PLAN_LIMITS   = { free: 30,  basic: 100, premium: 300 } as const;
+const FEATURED_LIMITS = { free: 0, basic: 5,   premium: 15  } as const;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
@@ -87,7 +88,8 @@ function toLocal(p: StoreProduct): LocalProduct {
 export default function ProductsPage() {
   const auth = getAuth();
   const STORE_PLAN = (auth?.plan ?? "basic") as keyof typeof PLAN_LIMITS;
-  const MAX_PRODUCTS = PLAN_LIMITS[STORE_PLAN];
+  const MAX_PRODUCTS  = PLAN_LIMITS[STORE_PLAN];
+  const MAX_FEATURED  = FEATURED_LIMITS[STORE_PLAN];
 
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -239,13 +241,16 @@ export default function ProductsPage() {
 
   // ── Featured ───────────────────────────────────────────────────────────────
 
-  const MAX_FEATURED = 3;
   const featuredCount = products.filter(p => p._featured).length;
 
   async function handleToggleFeatured(product: LocalProduct) {
     const isNowFeatured = !product._featured;
+    if (MAX_FEATURED === 0) {
+      showError(`O plano ${STORE_PLAN} não permite produtos em destaque.`);
+      return;
+    }
     if (isNowFeatured && featuredCount >= MAX_FEATURED) {
-      showError(`Máximo de ${MAX_FEATURED} produtos em destaque por loja (plano básico).`);
+      showError(`Máximo de ${MAX_FEATURED} destaques no plano ${STORE_PLAN}.`);
       return;
     }
     setProducts(cur =>
