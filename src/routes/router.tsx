@@ -7,6 +7,7 @@ import StoreSettingsPage from "../pages/StoreSettingsPage";
 import OrdersPage from "../pages/OrdersPage";
 import CourierPage from "../pages/CourierPage";
 import LoginPage from "../pages/LoginPage";
+import RegisterPage from "../pages/RegisterPage";
 
 import { getAuth } from "../services/auth";
 
@@ -22,6 +23,10 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    path: "/cadastro",
+    element: <RegisterPage />,
   },
   {
     path: "/",

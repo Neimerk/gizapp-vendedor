@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { loginSeller } from "../services/gizApi";
 import { saveAuth, getAuth } from "../services/auth";
 
@@ -92,7 +92,13 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-[#94a3b8]">
+        <p className="mt-5 text-center text-sm text-[#64748b]">
+          Não tem uma conta?{" "}
+          <Link to="/cadastro" className="font-bold text-[#16a34a] hover:underline">
+            Criar conta
+          </Link>
+        </p>
+        <p className="mt-3 text-center text-xs text-[#94a3b8]">
           BrasUX Loja · Venda, organize e entregue em um único sistema
         </p>
       </div>

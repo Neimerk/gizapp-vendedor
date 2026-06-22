@@ -113,6 +113,29 @@ export async function loginSeller(payload: LoginPayload) {
   return response.json();
 }
 
+export type RegisterStorePayload = {
+  name: string;
+  email: string;
+  password: string;
+  storeName: string;
+  category?: string;
+};
+
+export async function registerStore(payload: RegisterStorePayload) {
+  const response = await fetch(`${GIZ_API_URL}/api/auth/register-store`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message || "Erro ao criar conta. Verifique os dados e tente novamente.");
+  }
+
+  return response.json();
+}
+
 /* =========================
    STORES API
 ========================= */
