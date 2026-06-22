@@ -118,6 +118,7 @@ export type RegisterStorePayload = {
   email: string;
   password: string;
   storeName: string;
+  document: string;
   category?: string;
 };
 
