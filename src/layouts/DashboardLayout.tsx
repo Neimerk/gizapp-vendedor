@@ -110,7 +110,7 @@ export default function DashboardLayout() {
 
         <NavSection label="Ecossistema" />
         <a
-          href="https://brasux.com.br"
+          href="https://brasux.store"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/40 transition-colors hover:bg-white/6 hover:text-white/70"
