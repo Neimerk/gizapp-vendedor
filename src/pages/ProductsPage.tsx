@@ -112,12 +112,18 @@ export default function ProductsPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [adding, setAdding] = useState(false);
 
-  // Error toast
+  // Toasts
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   function showError(msg: string) {
     setErrorMsg(msg);
     setTimeout(() => setErrorMsg(null), 4000);
+  }
+
+  function showSuccess(msg: string) {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(null), 3000);
   }
 
   async function loadProducts() {
@@ -348,6 +354,7 @@ export default function ProductsPage() {
       }
 
       setAddModalOpen(false);
+      showSuccess(`"${form.name.trim()}" adicionado à loja!`);
     } catch (e) {
       console.error(e);
       showError(e instanceof Error ? e.message : "Erro ao adicionar produto.");
@@ -377,6 +384,17 @@ export default function ProductsPage() {
 
   return (
     <div>
+      {/* Success toast */}
+      {successMsg && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-[#16a34a]/20 bg-white px-5 py-3.5 shadow-xl shadow-black/10">
+          <CheckCircle2 size={16} className="shrink-0 text-[#16a34a]" />
+          <p className="text-sm font-semibold text-[#15803d]">{successMsg}</p>
+          <button onClick={() => setSuccessMsg(null)} className="ml-1 text-[#86efac] hover:text-[#16a34a]">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Error toast */}
       {errorMsg && (
         <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-red-200 bg-white px-5 py-3.5 shadow-xl shadow-black/10">
