@@ -76,7 +76,7 @@ const EMPTY_FORM: NewProductForm = {
 
 const PAGE_SIZE = 20;
 
-const PLAN_LIMITS = { free: 5, basic: 15, premium: 30 } as const;
+const PLAN_LIMITS = { free: 30, basic: 100, premium: 300 } as const;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
