@@ -1,15 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Package, ClipboardList, Store, Truck,
   LogOut, ExternalLink, Menu, X, ChevronRight,
 } from "lucide-react";
 import { getAuth, logout } from "../services/auth";
+import { useOrdersStore } from "../stores/ordersStore";
+import OrderToast from "../components/ui/OrderToast";
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
   const auth = getAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const { fetchOrders, initSignalR, teardownSignalR, toastVisible, toastMessage, dismissToast } =
+    useOrdersStore();
+
+  useEffect(() => {
+    fetchOrders();
+    initSignalR();
+    return teardownSignalR;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isCourier = auth?.role === "Courier";
   const isSeller = auth?.role === "Seller" || auth?.role === "Admin";
@@ -133,6 +145,12 @@ export default function DashboardLayout() {
 
   return (
     <div className="flex min-h-screen" style={{ background: "#f8fafc" }}>
+      <OrderToast
+        visible={toastVisible}
+        title="Novo pedido recebido"
+        message={toastMessage}
+        onClose={dismissToast}
+      />
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 md:hidden"

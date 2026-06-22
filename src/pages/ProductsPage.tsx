@@ -15,6 +15,7 @@ import {
   ImageIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useBlocker } from "react-router-dom";
 
 import {
   addProductFromCatalog,
@@ -32,6 +33,7 @@ import {
   type StoreProduct,
 } from "../services/gizApi";
 import { getSellerStoreId } from "../services/gizApi";
+import { getAuth } from "../services/auth";
 import { categories } from "../data/categories";
 import { categoryIcons } from "../data/categoryIcons";
 import Pagination from "../components/ui/Pagination";
@@ -75,8 +77,6 @@ const EMPTY_FORM: NewProductForm = {
 const PAGE_SIZE = 20;
 
 const PLAN_LIMITS = { free: 5, basic: 15, premium: 30 } as const;
-const STORE_PLAN: keyof typeof PLAN_LIMITS = "basic"; // atualizar quando planos forem gerenciados
-const MAX_PRODUCTS = PLAN_LIMITS[STORE_PLAN];
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
@@ -85,6 +85,10 @@ function toLocal(p: StoreProduct): LocalProduct {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ProductsPage() {
+  const auth = getAuth();
+  const STORE_PLAN = (auth?.plan ?? "basic") as keyof typeof PLAN_LIMITS;
+  const MAX_PRODUCTS = PLAN_LIMITS[STORE_PLAN];
+
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
@@ -123,7 +127,7 @@ export default function ProductsPage() {
       ]);
       const slugSet = new Set(featuredSlugs);
       setProducts(
-        data.filter(p => p.available).map(p => ({
+        data.map(p => ({
           ...toLocal(p),
           _featured: slugSet.has(p.slug),
         }))
@@ -136,6 +140,19 @@ export default function ProductsPage() {
   }
 
   useEffect(() => { loadProducts(); }, []);
+
+  const modifiedCount = products.filter(p => p._modified).length;
+
+  // Bloqueia navegação interna se houver alterações não salvas
+  const blocker = useBlocker(modifiedCount > 0);
+
+  // Bloqueia reload/fechar aba se houver alterações não salvas
+  useEffect(() => {
+    if (modifiedCount === 0) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [modifiedCount]);
 
   // ── Local mutations ────────────────────────────────────────────────────────
 
@@ -294,7 +311,7 @@ export default function ProductsPage() {
         const stock = parseInt(form.stock) || 0;
 
         // 4. Atualiza preço, estoque e disponibilidade
-        await updateStoreProduct(newSP.id, {
+        const updatedSP = await updateStoreProduct(newSP.id, {
           price, promotionalPrice: promoPrice,
           stock, available: form.available,
           imageAlt: form.imageAlt.trim() || undefined,
@@ -314,9 +331,17 @@ export default function ProductsPage() {
           price, promotionalPrice: promoPrice,
           stock, available: form.available,
         });
+
+        // 7. Atualiza estado local sem re-fetch (update otimista)
+        const imageUrlFinal = form.imageUrl || updatedSP.imageUrl;
+        setProducts(cur => [
+          { ...toLocal({ ...updatedSP, imageUrl: imageUrlFinal }), _featured: false },
+          ...cur,
+        ]);
+      } else {
+        await loadProducts();
       }
 
-      await loadProducts();
       setAddModalOpen(false);
     } catch (e) {
       console.error(e);
@@ -342,8 +367,6 @@ export default function ProductsPage() {
   }, [products, search, showUnavailable]);
 
   const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE);
-
-  const modifiedCount = products.filter(p => p._modified).length;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -539,6 +562,36 @@ export default function ProductsPage() {
           onConfirm={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
         />
+      )}
+
+      {/* Unsaved changes navigation blocker */}
+      {blocker.state === "blocked" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50">
+              <AlertCircle size={22} className="text-amber-500" />
+            </div>
+            <h2 className="text-lg font-black text-[#0f172a]">Alterações não salvas</h2>
+            <p className="mt-2 text-sm text-[#64748b]">
+              Você tem <strong>{modifiedCount} produto{modifiedCount !== 1 ? "s" : ""}</strong> com
+              alterações não salvas. Se sair agora, as mudanças serão perdidas.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => blocker.reset()}
+                className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] hover:bg-[#f8fafc]"
+              >
+                Ficar e salvar
+              </button>
+              <button
+                onClick={() => blocker.proceed()}
+                className="flex-1 rounded-2xl bg-red-500 py-3 text-sm font-black text-white"
+              >
+                Sair sem salvar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

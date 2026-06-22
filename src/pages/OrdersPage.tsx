@@ -1,12 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { RefreshCw, ReceiptText } from "lucide-react";
+import { useMemo, useState } from "react";
+import { RefreshCw, ReceiptText, Search, X, AlertCircle, Phone } from "lucide-react";
 
-import OrderToast from "../components/ui/OrderToast";
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
-import { getOrders, updateOrderStatus, type Order } from "../services/gizApi";
-import { playOrderSound } from "../services/audio";
-import { ordersConnection, startOrdersConnection } from "../services/signalr";
+import { useOrdersStore } from "../stores/ordersStore";
 
 const STATUS_LABEL: Record<number, string> = {
   0: "Pendente",
@@ -30,7 +27,7 @@ const ORDER_BADGE_BORDER: Record<number, string> = {
   0: "#fde68a", 1: "#ddd6fe", 2: "#bfdbfe", 3: "#fed7aa", 4: "#bbf7d0", 5: "#fecaca",
 };
 
-const FILTERS = [
+const STATUS_FILTERS = [
   { label: "Todos",        value: "all"       },
   { label: "Pendentes",    value: "pending"   },
   { label: "Em andamento", value: "active"    },
@@ -38,10 +35,26 @@ const FILTERS = [
   { label: "Cancelados",   value: "cancelled" },
 ] as const;
 
-type FilterKey = (typeof FILTERS)[number]["value"];
+const DATE_FILTERS = [
+  { label: "Todos os dias", value: "all"    },
+  { label: "Hoje",          value: "today"  },
+  { label: "7 dias",        value: "7days"  },
+] as const;
+
+type StatusFilter = (typeof STATUS_FILTERS)[number]["value"];
+type DateFilter   = (typeof DATE_FILTERS)[number]["value"];
 
 function formatMoney(v: number) {
   return `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
+}
+
+function isToday(d: string) {
+  const n = new Date(), t = new Date(d);
+  return (
+    n.getDate() === t.getDate() &&
+    n.getMonth() === t.getMonth() &&
+    n.getFullYear() === t.getFullYear()
+  );
 }
 
 function getNextAction(status: number) {
@@ -55,26 +68,19 @@ function getNextAction(status: number) {
 const PAGE_SIZE = 10;
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [updatingId, setUpdatingId] = useState("");
-  const [filter, setFilter] = useState<FilterKey>("all");
-  const [toastVisible, setToastVisible] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
+  const { orders, loading, refresh, updateOrderStatus } = useOrdersStore();
 
-  async function loadOrders(showLoading = true) {
-    try {
-      if (showLoading) setLoading(true);
-      else setRefreshing(true);
-      const data = await getOrders();
-      setOrders(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      if (showLoading) setLoading(false);
-      else setRefreshing(false);
-    }
+  const [refreshing,  setRefreshing]  = useState(false);
+  const [updatingId,  setUpdatingId]  = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [dateFilter,  setDateFilter]  = useState<DateFilter>("all");
+  const [search,      setSearch]      = useState("");
+  const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
   }
 
   async function handleStatus(orderId: string, status: number) {
@@ -82,58 +88,37 @@ export default function OrdersPage() {
     try {
       setUpdatingId(orderId);
       await updateOrderStatus(orderId, status);
-      setOrders((cur) => cur.map((o) => (o.id === orderId ? { ...o, status } : o)));
       requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "instant" }));
     } catch (error) {
-      console.error(error);
-      setToastMessage(error instanceof Error ? error.message : "Erro ao atualizar pedido.");
-      setToastVisible(true);
+      const msg = error instanceof Error ? error.message : "Erro ao atualizar pedido.";
+      setErrorMsg(msg);
+      setTimeout(() => setErrorMsg(null), 4000);
     } finally {
       setUpdatingId("");
     }
   }
 
-  useEffect(() => {
-    loadOrders(true);
-
-    async function setupSignalR() {
-      try {
-        await startOrdersConnection();
-        ordersConnection.off("OrderCreated");
-        ordersConnection.off("OrderStatusUpdated");
-
-        ordersConnection.on("OrderCreated", (newOrder: Order) => {
-          setToastMessage("Novo pedido recebido no BrasUX Loja!");
-          setToastVisible(true);
-          playOrderSound();
-          setOrders((cur) =>
-            cur.some((o) => o.id === newOrder.id) ? cur : [newOrder, ...cur]
-          );
-        });
-
-        ordersConnection.on("OrderStatusUpdated", (updated: Order) => {
-          setOrders((cur) => cur.map((o) => (o.id === updated.id ? updated : o)));
-        });
-      } catch (error) {
-        console.error("SignalR:", error);
-      }
-    }
-    setupSignalR();
-
-    return () => {
-      ordersConnection.off("OrderCreated");
-      ordersConnection.off("OrderStatusUpdated");
-    };
-  }, []);
-
   const filtered = useMemo(() => {
-    if (filter === "all")       return orders;
-    if (filter === "pending")   return orders.filter((o) => o.status === 0);
-    if (filter === "active")    return orders.filter((o) => [1, 2, 3].includes(o.status));
-    if (filter === "done")      return orders.filter((o) => o.status === 4);
-    if (filter === "cancelled") return orders.filter((o) => o.status === 5);
-    return orders;
-  }, [orders, filter]);
+    let result = orders;
+
+    if (dateFilter === "today") {
+      result = result.filter((o) => isToday(o.createdAt));
+    } else if (dateFilter === "7days") {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      result = result.filter((o) => new Date(o.createdAt) >= cutoff);
+    }
+
+    if (statusFilter === "pending")   result = result.filter((o) => o.status === 0);
+    if (statusFilter === "active")    result = result.filter((o) => [1, 2, 3].includes(o.status));
+    if (statusFilter === "done")      result = result.filter((o) => o.status === 4);
+    if (statusFilter === "cancelled") result = result.filter((o) => o.status === 5);
+
+    const q = search.trim().toLowerCase();
+    if (q) result = result.filter((o) => o.customerName.toLowerCase().includes(q));
+
+    return result;
+  }, [orders, statusFilter, dateFilter, search]);
 
   const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE);
 
@@ -150,12 +135,16 @@ export default function OrdersPage() {
 
   return (
     <div>
-      <OrderToast
-        visible={toastVisible}
-        title="Novo pedido recebido"
-        message={toastMessage}
-        onClose={() => setToastVisible(false)}
-      />
+      {/* Error toast */}
+      {errorMsg && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-red-200 bg-white px-5 py-3.5 shadow-xl shadow-black/10">
+          <AlertCircle size={16} className="shrink-0 text-red-500" />
+          <p className="text-sm font-semibold text-red-700">{errorMsg}</p>
+          <button onClick={() => setErrorMsg(null)} className="ml-1 text-red-400 hover:text-red-600">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
@@ -165,27 +154,62 @@ export default function OrdersPage() {
           <p className="mt-0.5 text-sm text-[#94a3b8]">{orders.length} pedido{orders.length !== 1 ? "s" : ""} no total</p>
         </div>
         <button
-          onClick={() => loadOrders(false)}
+          onClick={handleRefresh}
           className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-4 py-2.5 text-sm font-bold text-[#64748b] shadow-sm hover:bg-[#f8fafc] hover:text-[#0f172a]"
         >
           <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} /> Atualizar
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="mb-5 flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
+      {/* Search */}
+      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-4 py-3 shadow-sm">
+        <Search size={16} className="shrink-0 text-[#94a3b8]" />
+        <input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          placeholder="Buscar por nome do cliente…"
+          className="w-full bg-transparent text-sm font-semibold text-[#0f172a] outline-none placeholder:text-[#cbd5e1]"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="shrink-0 text-[#94a3b8] hover:text-[#64748b]">
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* Date filter pills */}
+      <div className="mb-3 flex flex-wrap gap-2">
+        {DATE_FILTERS.map((f) => (
           <button
             key={f.value}
-            onClick={() => { setFilter(f.value); setPage(1); }}
+            onClick={() => { setDateFilter(f.value); setPage(1); }}
+            className={`rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
+              dateFilter === f.value
+                ? "bg-[#0f172a] text-white"
+                : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Status filter tabs */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => { setStatusFilter(f.value); setPage(1); }}
             className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
-              filter === f.value
+              statusFilter === f.value
                 ? "bg-[#16a34a] text-white shadow-sm"
                 : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a]"
             }`}
           >
             {f.label}
-            <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${filter === f.value ? "bg-white/20 text-white" : "bg-[#f1f5f9] text-[#94a3b8]"}`}>
+            <span className={`rounded-lg px-1.5 py-0.5 text-[10px] font-black ${
+              statusFilter === f.value ? "bg-white/20 text-white" : "bg-[#f1f5f9] text-[#94a3b8]"
+            }`}>
               {counts[f.value]}
             </span>
           </button>
@@ -199,7 +223,10 @@ export default function OrdersPage() {
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white py-20 text-center" style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+        <div
+          className="flex flex-col items-center gap-4 rounded-2xl border border-[#e2e8f0] bg-white py-20 text-center"
+          style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}
+        >
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#f8fafc]">
             <ReceiptText size={28} className="text-[#cbd5e1]" />
           </div>
@@ -245,12 +272,25 @@ export default function OrdersPage() {
                   </div>
 
                   <div className="px-5 py-4">
-                    {/* Address */}
-                    <p className="mb-4 text-sm text-[#64748b]">
-                      📍 {order.deliveryAddress}, {order.deliveryNumber}
-                      {order.deliveryComplement ? ` — ${order.deliveryComplement}` : ""}
-                      {order.deliveryNeighborhood ? ` · ${order.deliveryNeighborhood}` : ""}
-                    </p>
+                    {/* Address + phone */}
+                    <div className="mb-4 space-y-1.5">
+                      <p className="text-sm text-[#64748b]">
+                        📍 {order.deliveryAddress}, {order.deliveryNumber}
+                        {order.deliveryComplement ? ` — ${order.deliveryComplement}` : ""}
+                        {order.deliveryNeighborhood ? ` · ${order.deliveryNeighborhood}` : ""}
+                      </p>
+                      {order.customerPhone && (
+                        <p className="flex items-center gap-1.5 text-sm text-[#64748b]">
+                          <Phone size={13} className="shrink-0 text-[#94a3b8]" />
+                          <a
+                            href={`tel:${order.customerPhone}`}
+                            className="font-semibold text-[#0f172a] hover:text-[#16a34a] underline underline-offset-2"
+                          >
+                            {order.customerPhone}
+                          </a>
+                        </p>
+                      )}
+                    </div>
 
                     {/* Items */}
                     <div className="space-y-2">

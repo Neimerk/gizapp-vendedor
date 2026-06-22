@@ -3,7 +3,7 @@ import { getAuth, getAuthToken, logout } from "./auth";
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
 
-const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.dev";
+export const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.dev";
 
 const IMAGE_BASE_URL: string =
   import.meta.env.VITE_IMAGE_BASE_URL || IMAGE_WORKER_URL;

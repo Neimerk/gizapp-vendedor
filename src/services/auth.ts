@@ -6,6 +6,7 @@ export type AuthUser = {
   email: string;
   role: "Admin" | "Customer" | "Seller" | "Courier";
   storeId?: string | null;
+  plan?: "free" | "basic" | "premium";
   token: string;
 };
 

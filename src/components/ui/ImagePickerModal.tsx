@@ -18,6 +18,7 @@ import {
   getWorkerImages,
   uploadProductImage,
   getProductImageUrl,
+  IMAGE_WORKER_URL,
   type CatalogProduct,
 } from "../../services/gizApi";
 import {
@@ -94,22 +95,44 @@ export default function ImagePickerModal({
     setCatalogLoading(true);
     setCatalogError(null);
     try {
-      // Tenta catálogo da API primeiro (1100+ produtos com imagens)
-      const items = await getCatalogProducts(q);
-      const withImages = items.filter((p) => p.imageUrl);
-      if (withImages.length > 0) {
-        setCatalog(withImages);
-      } else {
-        // Fallback: imagens do R2 (uploads do usuário)
-        const workerItems = await getWorkerImages(q);
-        setCatalog(workerItems);
+      // Busca ambas as fontes em paralelo para garantir que imagens do worker
+      // (URL completa e válida) sempre apareçam, mesmo que o catálogo da API
+      // tenha imageUrls de CDNs externos que possam estar inacessíveis.
+      const [workerResult, catalogResult] = await Promise.allSettled([
+        getWorkerImages(q),
+        getCatalogProducts(q),
+      ]);
+
+      const workerItems =
+        workerResult.status === "fulfilled" ? workerResult.value : [];
+
+      // Só inclui itens do catálogo cujo imageUrl aponta para o worker (imagens hospedadas por nós).
+      // Itens com URLs de CDNs externos ou paths relativos são excluídos para evitar cards vazios.
+      const catalogItems =
+        catalogResult.status === "fulfilled"
+          ? catalogResult.value.filter((p) => p.imageUrl?.startsWith(IMAGE_WORKER_URL))
+          : [];
+
+      // Merge sem duplicatas (por imageUrl)
+      const seenUrls = new Set<string>();
+      const merged: CatalogProduct[] = [];
+      for (const item of [...catalogItems, ...workerItems]) {
+        if (item.imageUrl && !seenUrls.has(item.imageUrl)) {
+          seenUrls.add(item.imageUrl);
+          merged.push(item);
+        }
       }
-    } catch {
-      try {
-        const workerItems = await getWorkerImages(q);
-        setCatalog(workerItems);
-      } catch (e2) {
-        setCatalogError(e2 instanceof Error ? e2.message : "Erro ao carregar banco de imagens.");
+
+      if (merged.length > 0) {
+        setCatalog(merged);
+      } else {
+        const err =
+          workerResult.status === "rejected" ? workerResult.reason : null;
+        if (err) {
+          setCatalogError(
+            err instanceof Error ? err.message : "Erro ao carregar banco de imagens."
+          );
+        }
         setCatalog([]);
       }
     } finally {
@@ -600,7 +623,10 @@ function BankTab({
                       src={getProductImageUrl(product.imageUrl)}
                       alt={product.imageAlt || product.name}
                       className="h-full w-full object-contain transition-transform group-hover:scale-105"
-                      onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' fill='%23f1f5f9'/%3E%3Cpath d='M3 9l4-4 4 4 4-5 6 8H3z' fill='%23e2e8f0'/%3E%3Ccircle cx='8.5' cy='8.5' r='2' fill='%23e2e8f0'/%3E%3C/svg%3E";
+                      }}
                       loading="lazy"
                     />
                     {isSelected && (

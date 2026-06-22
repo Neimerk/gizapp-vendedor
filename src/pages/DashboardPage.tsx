@@ -6,10 +6,11 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import {
-  getOrders, getStoreById, getStoreProducts,
-  type Order, type Store, type StoreProduct,
+  getStoreById, getStoreProducts,
+  type Store, type StoreProduct,
 } from "../services/gizApi";
 import { getAuth } from "../services/auth";
+import { useOrdersStore } from "../stores/ordersStore";
 
 const STATUS_DOT: Record<number, string> = {
   0: "#f59e0b", 1: "#8b5cf6", 2: "#3b82f6", 3: "#f97316", 4: "#16a34a", 5: "#ef4444",
@@ -30,24 +31,26 @@ export default function DashboardPage() {
   const auth = getAuth();
   const canSell = auth?.role === "Seller" || auth?.role === "Admin" || (auth?.role === "Courier" && !!auth?.storeId);
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { orders, loading: ordersLoading } = useOrdersStore();
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [store, setStore] = useState<Store | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [localLoading, setLocalLoading] = useState(true);
 
   useEffect(() => {
     if (!canSell) return;
     (async () => {
       try {
-        const [o, p, s] = await Promise.all([
-          getOrders(), getStoreProducts(),
+        const [p, s] = await Promise.all([
+          getStoreProducts(),
           auth?.storeId ? getStoreById(auth.storeId) : Promise.resolve(null),
         ]);
-        setOrders(o); setProducts(p); setStore(s);
+        setProducts(p); setStore(s);
       } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+      finally { setLocalLoading(false); }
     })();
   }, [canSell]);
+
+  const loading = ordersLoading || localLoading;
 
   if (!canSell) return <Navigate to="/entregas" replace />;
 
