@@ -23,6 +23,7 @@ import {
   createProduct,
   getFeaturedSlugs,
   getProductImageUrl,
+  getStoreById,
   getStoreProducts,
   invalidateProductsCache,
   removeStoreProduct,
@@ -93,6 +94,7 @@ export default function ProductsPage() {
   const MAX_FEATURED  = FEATURED_LIMITS[STORE_PLAN];
 
   const [products, setProducts] = useState<LocalProduct[]>([]);
+  const [storeName, setStoreName] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState("");
   const [search, setSearch] = useState("");
@@ -130,10 +132,13 @@ export default function ProductsPage() {
   async function loadProducts() {
     try {
       setLoading(true);
-      const [data, featuredSlugs] = await Promise.all([
+      const storeId = getSellerStoreId();
+      const [data, featuredSlugs, store] = await Promise.all([
         getStoreProducts(),
-        getFeaturedSlugs(),
+        getFeaturedSlugs(storeId),
+        getStoreById(storeId).catch(() => null),
       ]);
+      if (store) setStoreName(store.name);
       const slugSet = new Set(featuredSlugs);
       setProducts(
         data.map(p => ({
@@ -205,6 +210,7 @@ export default function ProductsPage() {
         imageAlt: product._imageAlt || null,
         price: product.price, promotionalPrice: product.promotionalPrice ?? null,
         stock: product.stock, available: product.available,
+        storeId: getSellerStoreId(), storeName,
       });
     } catch (e) {
       console.error(e);
@@ -239,7 +245,7 @@ export default function ProductsPage() {
       await removeStoreProduct(deleteTarget.id);
       invalidateProductsCache();
       setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
-      removeProductFromShopping(deleteTarget.slug);
+      removeProductFromShopping(deleteTarget.slug, getSellerStoreId());
       setDeleteTarget(null);
     } catch (e) {
       console.error(e);
@@ -262,7 +268,7 @@ export default function ProductsPage() {
     setProducts(cur =>
       cur.map(p => p.id === product.id ? { ...p, _featured: isNowFeatured } : p)
     );
-    toggleFeaturedInShopping(product.slug, isNowFeatured);
+    toggleFeaturedInShopping(product.slug, isNowFeatured, getSellerStoreId());
   }
 
   // ── Image ──────────────────────────────────────────────────────────────────
@@ -341,6 +347,7 @@ export default function ProductsPage() {
           imageAlt: form.imageAlt.trim() || null,
           price, promotionalPrice: promoPrice,
           stock, available: form.available,
+          storeId: getSellerStoreId(), storeName,
         });
 
         // 7. Atualiza estado local sem re-fetch (usa newSP + campos do form)

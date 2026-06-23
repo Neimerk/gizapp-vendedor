@@ -350,23 +350,26 @@ export async function syncProductToShopping(product: {
   description?: string | null; imageUrl?: string | null;
   imageAlt?: string | null; price: number;
   promotionalPrice?: number | null; stock: number; available: boolean;
+  storeId?: string; storeName?: string;
 }): Promise<void> {
   await fetch(`${IMAGE_WORKER_URL}/sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(product),
-  }).catch(() => {}); // silencioso — não bloqueia o fluxo principal
+  }).catch(() => {});
 }
 
-export async function removeProductFromShopping(slug: string): Promise<void> {
-  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}`, {
+export async function removeProductFromShopping(slug: string, storeId?: string): Promise<void> {
+  const params = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
+  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}${params}`, {
     method: "DELETE",
   }).catch(() => {});
 }
 
-export async function getFeaturedSlugs(): Promise<string[]> {
+export async function getFeaturedSlugs(storeId?: string): Promise<string[]> {
   try {
-    const res = await fetch(`${IMAGE_WORKER_URL}/featured-slugs`);
+    const params = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
+    const res = await fetch(`${IMAGE_WORKER_URL}/featured-slugs${params}`);
     const data = await res.json() as { slugs: string[] };
     return data.slugs ?? [];
   } catch {
@@ -374,11 +377,11 @@ export async function getFeaturedSlugs(): Promise<string[]> {
   }
 }
 
-export async function toggleFeaturedInShopping(slug: string, featured: boolean): Promise<void> {
+export async function toggleFeaturedInShopping(slug: string, featured: boolean, storeId?: string): Promise<void> {
   await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}/featured`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ featured }),
+    body: JSON.stringify({ featured, storeId }),
   }).catch(() => {});
 }
 
