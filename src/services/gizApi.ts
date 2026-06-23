@@ -350,6 +350,7 @@ export async function syncProductToShopping(product: {
   description?: string | null; imageUrl?: string | null;
   imageAlt?: string | null; price: number;
   promotionalPrice?: number | null; stock: number; available: boolean;
+  featured?: boolean;
   storeId?: string; storeName?: string;
 }): Promise<void> {
   await fetch(`${IMAGE_WORKER_URL}/sync`, {

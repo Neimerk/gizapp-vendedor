@@ -29,7 +29,6 @@ import {
   removeStoreProduct,
   removeProductFromShopping,
   syncProductToShopping,
-  toggleFeaturedInShopping,
   updateStoreProduct,
   updateStoreProductImage,
   type StoreProduct,
@@ -269,7 +268,7 @@ export default function ProductsPage() {
       cur.map(p => p.id === product.id ? { ...p, _featured: isNowFeatured } : p)
     );
     const storeId = getSellerStoreId();
-    // Garante que o produto existe na Shopping DB sob o storeId correto antes de togglear
+    // Sync com featured no payload — upsert atômico, sem race condition
     syncProductToShopping({
       name: product.name, slug: product.slug, category: product.category,
       subCategory: product.subCategory, brand: product.brand,
@@ -277,9 +276,9 @@ export default function ProductsPage() {
       imageAlt: product._imageAlt || null,
       price: product.price, promotionalPrice: product.promotionalPrice ?? null,
       stock: product.stock, available: product.available,
+      featured: isNowFeatured,
       storeId, storeName,
     });
-    toggleFeaturedInShopping(product.slug, isNowFeatured, storeId);
   }
 
   // ── Image ──────────────────────────────────────────────────────────────────
