@@ -268,7 +268,18 @@ export default function ProductsPage() {
     setProducts(cur =>
       cur.map(p => p.id === product.id ? { ...p, _featured: isNowFeatured } : p)
     );
-    toggleFeaturedInShopping(product.slug, isNowFeatured, getSellerStoreId());
+    const storeId = getSellerStoreId();
+    // Garante que o produto existe na Shopping DB sob o storeId correto antes de togglear
+    syncProductToShopping({
+      name: product.name, slug: product.slug, category: product.category,
+      subCategory: product.subCategory, brand: product.brand,
+      description: product.description, imageUrl: product.imageUrl,
+      imageAlt: product._imageAlt || null,
+      price: product.price, promotionalPrice: product.promotionalPrice ?? null,
+      stock: product.stock, available: product.available,
+      storeId, storeName,
+    });
+    toggleFeaturedInShopping(product.slug, isNowFeatured, storeId);
   }
 
   // ── Image ──────────────────────────────────────────────────────────────────
