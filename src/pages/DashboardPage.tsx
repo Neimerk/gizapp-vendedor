@@ -149,7 +149,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Status pills */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {PILL_STATS.map(s => {
           const Icon = s.icon;
           return (

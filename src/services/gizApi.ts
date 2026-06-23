@@ -169,18 +169,33 @@ export async function updateStore(id: string, data: Store): Promise<void> {
    STORE PRODUCTS API
 ========================= */
 
+type ProductsCache = { storeId: string; data: StoreProduct[]; ts: number };
+let _productsCache: ProductsCache | null = null;
+const PRODUCTS_CACHE_TTL = 60_000;
+
+export function invalidateProductsCache(): void {
+  _productsCache = null;
+}
+
 export async function getStoreProducts(
-  storeId: string = getSellerStoreId()
+  storeId: string = getSellerStoreId(),
+  fresh = false,
 ): Promise<StoreProduct[]> {
+  const now = Date.now();
+  if (
+    !fresh &&
+    _productsCache?.storeId === storeId &&
+    now - _productsCache.ts < PRODUCTS_CACHE_TTL
+  ) {
+    return _productsCache.data;
+  }
   const response = await fetch(`${GIZ_API_URL}/api/storeproducts/${storeId}`, {
     cache: "no-store",
   });
-
-  if (!response.ok) {
-    throw new Error("Erro ao buscar produtos da loja");
-  }
-
-  return response.json();
+  if (!response.ok) throw new Error("Erro ao buscar produtos da loja");
+  const data: StoreProduct[] = await response.json();
+  _productsCache = { storeId, data, ts: now };
+  return data;
 }
 
 export async function updateStoreProduct(

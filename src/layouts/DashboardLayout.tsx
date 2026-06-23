@@ -13,10 +13,13 @@ export default function DashboardLayout() {
   const auth = getAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { fetchOrders, initSignalR, teardownSignalR, toastVisible, toastMessage, dismissToast } =
+  const { fetchOrders, initSignalR, teardownSignalR, toastVisible, toastMessage, dismissToast, wsStatus } =
     useOrdersStore();
 
   useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
     fetchOrders();
     initSignalR();
     return teardownSignalR;
@@ -128,9 +131,21 @@ export default function DashboardLayout() {
           >
             {auth?.name?.[0]?.toUpperCase() ?? "?"}
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="truncate text-xs font-black text-white">{auth?.name || "Usuário"}</p>
             <p className="truncate text-[10px] text-white/40">{roleLabel}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{
+                background: wsStatus === "connected" ? "#4ade80" : wsStatus === "connecting" ? "#facc15" : "#f87171",
+                boxShadow: wsStatus === "connected" ? "0 0 6px #4ade80" : undefined,
+              }}
+            />
+            <span className="text-[9px] font-bold text-white/25">
+              {wsStatus === "connected" ? "ao vivo" : wsStatus === "connecting" ? "conectando" : "offline"}
+            </span>
           </div>
         </div>
         <button
@@ -150,6 +165,7 @@ export default function DashboardLayout() {
         title="Novo pedido recebido"
         message={toastMessage}
         onClose={dismissToast}
+        onAction={() => { dismissToast(); navigate("/pedidos"); }}
       />
       {sidebarOpen && (
         <div

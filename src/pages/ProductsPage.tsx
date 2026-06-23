@@ -24,6 +24,7 @@ import {
   getFeaturedSlugs,
   getProductImageUrl,
   getStoreProducts,
+  invalidateProductsCache,
   removeStoreProduct,
   removeProductFromShopping,
   syncProductToShopping,
@@ -77,7 +78,7 @@ const EMPTY_FORM: NewProductForm = {
 const PAGE_SIZE = 20;
 
 const PLAN_LIMITS   = { free: 30,  basic: 100, premium: 300 } as const;
-const FEATURED_LIMITS = { free: 0, basic: 5,   premium: 15  } as const;
+const FEATURED_LIMITS = { free: 3, basic: 15,  premium: 30  } as const;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
@@ -192,6 +193,7 @@ export default function ProductsPage() {
         available: product.available,
         imageAlt: product._imageAlt || undefined,
       });
+      invalidateProductsCache();
       setProducts(cur =>
         cur.map(p => p.id === product.id ? { ...p, _modified: false } : p)
       );
@@ -219,6 +221,7 @@ export default function ProductsPage() {
       setClearing(true);
       const storeId = getSellerStoreId();
       await clearStoreProducts(storeId);
+      invalidateProductsCache();
       setProducts([]);
       setShowClearConfirm(false);
     } catch (e) {
@@ -234,6 +237,7 @@ export default function ProductsPage() {
     try {
       setDeleting(true);
       await removeStoreProduct(deleteTarget.id);
+      invalidateProductsCache();
       setProducts(cur => cur.filter(p => p.id !== deleteTarget.id));
       removeProductFromShopping(deleteTarget.slug);
       setDeleteTarget(null);
@@ -312,8 +316,8 @@ export default function ProductsPage() {
       // 2. Adiciona à loja (retorna só mensagem, sem o objeto)
       await addProductFromCatalog(catalogProduct.id);
 
-      // 3. Busca o store product recém-criado pelo productId
-      const allStoreProducts = await getStoreProducts();
+      // 3. Busca o store product recém-criado pelo productId (sempre fresh)
+      const allStoreProducts = await getStoreProducts(undefined, true);
       const newSP = allStoreProducts.find(p => p.productId === catalogProduct.id);
 
       if (newSP) {
@@ -322,7 +326,7 @@ export default function ProductsPage() {
         const stock = parseInt(form.stock) || 0;
 
         // 4. Atualiza preço, estoque e disponibilidade
-        const updatedSP = await updateStoreProduct(newSP.id, {
+        await updateStoreProduct(newSP.id, {
           price, promotionalPrice: promoPrice,
           stock, available: form.available,
           imageAlt: form.imageAlt.trim() || undefined,
@@ -343,16 +347,28 @@ export default function ProductsPage() {
           stock, available: form.available,
         });
 
-        // 7. Atualiza estado local sem re-fetch (update otimista)
-        const imageUrlFinal = form.imageUrl || updatedSP.imageUrl;
+        // 7. Atualiza estado local sem re-fetch (usa newSP + campos do form)
+        const imageUrlFinal = form.imageUrl || newSP.imageUrl;
         setProducts(cur => [
-          { ...toLocal({ ...updatedSP, imageUrl: imageUrlFinal }), _featured: false },
+          {
+            ...toLocal({
+              ...newSP,
+              price,
+              promotionalPrice: promoPrice,
+              stock,
+              available: form.available,
+              imageUrl: imageUrlFinal ?? undefined,
+              imageAlt: form.imageAlt.trim() || newSP.imageAlt,
+            }),
+            _featured: false,
+          },
           ...cur,
         ]);
       } else {
         await loadProducts();
       }
 
+      invalidateProductsCache();
       setAddModalOpen(false);
       showSuccess(`"${form.name.trim()}" adicionado à loja!`);
     } catch (e) {

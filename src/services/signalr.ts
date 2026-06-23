@@ -9,6 +9,8 @@ class WsHub {
   private listeners = new Map<string, Set<EventCallback>>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private shouldReconnect = false;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
 
   get state(): "Connected" | "Connecting" | "Disconnected" {
     if (!this.ws) return "Disconnected";
@@ -40,7 +42,7 @@ class WsHub {
       this.ws = new WebSocket(wsUrl);
       this.shouldReconnect = true;
 
-      this.ws.onopen = () => resolve();
+      this.ws.onopen = () => { this.onConnect?.(); resolve(); };
       this.ws.onerror = (e) => reject(e);
 
       this.ws.onmessage = (e: MessageEvent) => {
@@ -51,6 +53,7 @@ class WsHub {
       };
 
       this.ws.onclose = () => {
+        this.onDisconnect?.();
         if (this.shouldReconnect) {
           this.reconnectTimer = setTimeout(() => {
             this.start().catch(() => { /* silent retry */ });

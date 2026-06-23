@@ -8,6 +8,7 @@ interface OrdersState {
   loading: boolean;
   toastMessage: string;
   toastVisible: boolean;
+  wsStatus: "connected" | "connecting" | "disconnected";
 
   fetchOrders: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -22,6 +23,7 @@ export const useOrdersStore = create<OrdersState>((set) => ({
   loading: false,
   toastMessage: "",
   toastVisible: false,
+  wsStatus: "disconnected",
 
   fetchOrders: async () => {
     set({ loading: true });
@@ -52,6 +54,9 @@ export const useOrdersStore = create<OrdersState>((set) => ({
   },
 
   initSignalR: async () => {
+    set({ wsStatus: "connecting" });
+    ordersConnection.onConnect = () => set({ wsStatus: "connected" });
+    ordersConnection.onDisconnect = () => set({ wsStatus: "disconnected" });
     try {
       await startOrdersConnection();
       ordersConnection.off("OrderCreated");
@@ -62,10 +67,16 @@ export const useOrdersStore = create<OrdersState>((set) => ({
           orders: s.orders.some((o) => o.id === newOrder.id)
             ? s.orders
             : [newOrder, ...s.orders],
-          toastMessage: "Novo pedido recebido no BrasUX Loja!",
+          toastMessage: `${newOrder.customerName} · R$ ${Number(newOrder.total).toFixed(2).replace(".", ",")}`,
           toastVisible: true,
         }));
         playOrderSound();
+        if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+          new Notification("🛒 Novo pedido — BrasUX Loja", {
+            body: `${newOrder.customerName} · R$ ${Number(newOrder.total).toFixed(2).replace(".", ",")}`,
+            icon: "/logo-brasux.webp",
+          });
+        }
       });
 
       ordersConnection.on("OrderStatusUpdated", (updated: Order) => {
