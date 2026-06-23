@@ -255,10 +255,6 @@ export default function ProductsPage() {
 
   async function handleToggleFeatured(product: LocalProduct) {
     const isNowFeatured = !product._featured;
-    if (MAX_FEATURED === 0) {
-      showError(`O plano ${STORE_PLAN} não permite produtos em destaque.`);
-      return;
-    }
     if (isNowFeatured && featuredCount >= MAX_FEATURED) {
       showError(`Máximo de ${MAX_FEATURED} destaques no plano ${STORE_PLAN}.`);
       return;
