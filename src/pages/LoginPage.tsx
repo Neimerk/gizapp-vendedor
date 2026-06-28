@@ -65,7 +65,7 @@ const PLANS_PREVIEW = [
     period: "/mês",
     badge: null,
     highlight: false,
-    features: ["100 produtos", "15 destaques", "15 categorias", "1 loja"],
+    features: ["100 produtos", "15 destaques", "15 categorias", "Até 3 lojas"],
   },
   {
     name: "Premium",
@@ -73,7 +73,7 @@ const PLANS_PREVIEW = [
     period: "/mês",
     badge: "Mais popular",
     highlight: true,
-    features: ["300 produtos", "30 destaques", "Categorias ilimitadas", "3 lojas", "API + Relatórios"],
+    features: ["300 produtos", "30 destaques", "Categorias ilimitadas", "Até 10 lojas", "API + Relatórios"],
   },
   {
     name: "White Label",
