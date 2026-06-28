@@ -1292,7 +1292,16 @@ function AddProductModal({
           productName={form.name || "Novo produto"}
           currentImageUrl={form.imageUrl}
           defaultTab={imagePickerTab}
-          onConfirm={(url, alt) => { patch({ imageUrl: url, ...(alt ? { imageAlt: alt } : {}) }); setImagePickerOpen(false); }}
+          onConfirm={(url, alt, meta) => {
+            patch({
+              imageUrl: url,
+              ...(alt ? { imageAlt: alt } : {}),
+              ...(meta?.name && !form.name.trim() ? { name: meta.name } : {}),
+              ...(meta?.brand && !form.brand.trim() ? { brand: meta.brand } : {}),
+              ...(meta?.description && !form.description.trim() ? { description: meta.description } : {}),
+            });
+            setImagePickerOpen(false);
+          }}
           onClose={() => setImagePickerOpen(false)}
         />
       )}

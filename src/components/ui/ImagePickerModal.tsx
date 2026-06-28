@@ -38,11 +38,17 @@ type UploadState =
   | { phase: "uploading" }
   | { phase: "error"; message: string };
 
+export type CatalogImageMeta = {
+  name?: string;
+  brand?: string;
+  description?: string;
+};
+
 type Props = {
   productName: string;
   currentImageUrl?: string;
   defaultTab?: Tab;
-  onConfirm: (imageUrl: string, imageAlt?: string) => void;
+  onConfirm: (imageUrl: string, imageAlt?: string, catalogMeta?: CatalogImageMeta) => void;
   onClose: () => void;
 };
 
@@ -174,7 +180,11 @@ export default function ImagePickerModal({
     if (!selected?.imageUrl) return;
     setConfirming(true);
     try {
-      onConfirm(selected.imageUrl, selected.imageAlt || undefined);
+      onConfirm(selected.imageUrl, selected.imageAlt || undefined, {
+        name: selected.name,
+        brand: selected.brand,
+        description: selected.description,
+      });
     } finally {
       setConfirming(false);
     }
