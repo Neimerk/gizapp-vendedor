@@ -77,8 +77,9 @@ const EMPTY_FORM: NewProductForm = {
 
 const PAGE_SIZE = 20;
 
-const PLAN_LIMITS   = { free: 30,  basic: 100, premium: 300 } as const;
-const FEATURED_LIMITS = { free: 3, basic: 15,  premium: 30  } as const;
+const PLAN_LIMITS      = { free: 30,  basic: 100, premium: 300      } as const;
+const FEATURED_LIMITS  = { free: 3,   basic: 15,  premium: 30       } as const;
+const CATEGORY_LIMITS  = { free: 3,   basic: 15,  premium: Infinity  } as const;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
@@ -88,9 +89,10 @@ function toLocal(p: StoreProduct): LocalProduct {
 
 export default function ProductsPage() {
   const auth = getAuth();
-  const STORE_PLAN = (auth?.plan ?? "basic") as keyof typeof PLAN_LIMITS;
+  const STORE_PLAN    = (auth?.plan ?? "basic") as keyof typeof PLAN_LIMITS;
   const MAX_PRODUCTS  = PLAN_LIMITS[STORE_PLAN];
   const MAX_FEATURED  = FEATURED_LIMITS[STORE_PLAN];
+  const MAX_CATEGORIES = CATEGORY_LIMITS[STORE_PLAN];
 
   const [products, setProducts] = useState<LocalProduct[]>([]);
   const [storeName, setStoreName] = useState("");
@@ -196,6 +198,7 @@ export default function ProductsPage() {
         stock: product.stock,
         available: product.available,
         imageAlt: product._imageAlt || undefined,
+        category: product.category,
       });
       invalidateProductsCache();
       setProducts(cur =>
@@ -257,6 +260,7 @@ export default function ProductsPage() {
   // ── Featured ───────────────────────────────────────────────────────────────
 
   const featuredCount = products.filter(p => p._featured).length;
+  const usedCategorySet = useMemo(() => new Set(products.map(p => p.category)), [products]);
 
   async function handleToggleFeatured(product: LocalProduct) {
     const isNowFeatured = !product._featured;
@@ -463,6 +467,9 @@ export default function ProductsPage() {
               <Star size={10} />
               {featuredCount}/{MAX_FEATURED} destaque{featuredCount !== 1 ? "s" : ""}
             </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-600 ring-1 ring-blue-200">
+              {usedCategorySet.size}/{MAX_CATEGORIES === Infinity ? "∞" : MAX_CATEGORIES} categori{usedCategorySet.size !== 1 ? "as" : "a"}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -532,6 +539,8 @@ export default function ProductsPage() {
                 saving={savingId === product.id}
                 savingImage={savingImageId === product.id}
                 canFeatured={!product._featured && featuredCount < MAX_FEATURED}
+                usedCategories={usedCategorySet}
+                categoryLimit={MAX_CATEGORIES}
                 onPatch={(changes) => patch(product.id, changes)}
                 onAdjustStock={(d) => adjustStock(product.id, d)}
                 onSave={() => handleSave(product)}
@@ -656,6 +665,8 @@ function ProductCard({
   saving,
   savingImage,
   canFeatured,
+  usedCategories,
+  categoryLimit,
   onPatch,
   onAdjustStock,
   onSave,
@@ -667,6 +678,8 @@ function ProductCard({
   saving: boolean;
   savingImage: boolean;
   canFeatured: boolean;
+  usedCategories: Set<string>;
+  categoryLimit: number;
   onPatch: (changes: Partial<LocalProduct>) => void;
   onAdjustStock: (delta: number) => void;
   onSave: () => void;
@@ -828,6 +841,33 @@ function ProductCard({
                 {product.available ? "Ativo" : "Inativo"}
               </button>
             </div>
+          </div>
+
+          {/* Category */}
+          <div className="mt-3">
+            <label className="mb-1 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">
+              Categoria
+            </label>
+            <select
+              value={product.category}
+              onChange={e => {
+                const newCat = e.target.value;
+                const isNew = !usedCategories.has(newCat);
+                if (isNew && usedCategories.size >= categoryLimit) return;
+                onPatch({ category: newCat });
+              }}
+              className="w-full rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/20"
+            >
+              {categories.map(cat => {
+                const isNew = !usedCategories.has(cat.slug);
+                const blocked = isNew && usedCategories.size >= categoryLimit;
+                return (
+                  <option key={cat.slug} value={cat.slug} disabled={blocked}>
+                    {cat.name}{blocked ? " — limite do plano" : ""}
+                  </option>
+                );
+              })}
+            </select>
           </div>
 
           {/* SEO Alt text */}

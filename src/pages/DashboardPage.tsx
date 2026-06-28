@@ -1,12 +1,12 @@
 import {
   TrendingUp, ReceiptText, Package, AlertTriangle,
   ArrowRight, Clock, CheckCircle, XCircle, Truck,
-  Store as StoreIcon, ChevronRight,
+  Store as StoreIcon, ChevronRight, BarChart2,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, Link } from "react-router-dom";
 import {
-  getStoreById, getStoreProducts,
+  getStoreById, getStoreProducts, toggleStoreOpen,
   type Store, type StoreProduct,
 } from "../services/gizApi";
 import { getAuth } from "../services/auth";
@@ -22,9 +22,11 @@ const STATUS_LABEL: Record<number, string> = {
 function fmtBRL(v: number) {
   return `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
 }
+function isSameDay(a: Date, b: Date) {
+  return a.getDate() === b.getDate() && a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+}
 function isToday(d: string) {
-  const n = new Date(), t = new Date(d);
-  return n.getDate() === t.getDate() && n.getMonth() === t.getMonth() && n.getFullYear() === t.getFullYear();
+  return isSameDay(new Date(), new Date(d));
 }
 
 export default function DashboardPage() {
@@ -35,6 +37,7 @@ export default function DashboardPage() {
   const [products, setProducts] = useState<StoreProduct[]>([]);
   const [store, setStore] = useState<Store | null>(null);
   const [localLoading, setLocalLoading] = useState(true);
+  const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
     if (!canSell) return;
@@ -49,6 +52,20 @@ export default function DashboardPage() {
       finally { setLocalLoading(false); }
     })();
   }, [canSell]);
+
+  async function handleToggleOpen() {
+    if (!store || toggling) return;
+    const next = !store.isOpen;
+    setToggling(true);
+    try {
+      await toggleStoreOpen(store.id, next);
+      setStore({ ...store, isOpen: next });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setToggling(false);
+    }
+  }
 
   const loading = ordersLoading || localLoading;
 
@@ -70,6 +87,23 @@ export default function DashboardPage() {
     done:    orders.filter(o => o.status === 4).length,
     cancelled: orders.filter(o => o.status === 5).length,
   }), [orders]);
+
+  const revenueByDay = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (6 - i));
+      const dayOrders = orders.filter(o => o.status !== 5 && isSameDay(new Date(o.createdAt), d));
+      return {
+        label: d.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", ""),
+        day: d.getDate(),
+        revenue: dayOrders.reduce((s, o) => s + o.total, 0),
+        count: dayOrders.length,
+        isToday: isSameDay(d, new Date()),
+      };
+    });
+  }, [orders]);
+
+  const maxRevenue = Math.max(...revenueByDay.map(d => d.revenue), 1);
 
   if (loading) return (
     <div className="space-y-6">
@@ -94,6 +128,8 @@ export default function DashboardPage() {
     { label: "Cancelados", count: counts.cancelled, color: "#ef4444", bg: "#fef2f2", border: "#fecaca", icon: XCircle },
   ];
 
+  const totalRevenue7d = revenueByDay.reduce((s, d) => s + d.revenue, 0);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -108,18 +144,22 @@ export default function DashboardPage() {
           </p>
         </div>
         {store && (
-          <Link
-            to="/loja"
-            className="flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-all hover:shadow-sm"
+          <button
+            onClick={handleToggleOpen}
+            disabled={toggling}
+            className="flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition-all hover:shadow-sm disabled:opacity-60"
             style={store.isOpen
               ? { background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#15803d" }
               : { background: "#f8fafc", border: "1px solid #e2e8f0", color: "#64748b" }
             }
           >
             <StoreIcon size={14} />
-            {store.isOpen ? "Loja aberta" : "Loja fechada"}
-            <span className="h-2 w-2 rounded-full" style={{ background: store.isOpen ? "#16a34a" : "#cbd5e1" }} />
-          </Link>
+            {toggling ? "…" : store.isOpen ? "Loja aberta" : "Loja fechada"}
+            <span
+              className="h-2 w-2 rounded-full transition-colors"
+              style={{ background: store.isOpen ? "#16a34a" : "#cbd5e1" }}
+            />
+          </button>
         )}
       </div>
 
@@ -164,6 +204,60 @@ export default function DashboardPage() {
             </div>
           );
         })}
+      </div>
+
+      {/* Revenue chart — 7 days */}
+      <div
+        className="overflow-hidden rounded-2xl bg-white"
+        style={{ border: "1px solid #e2e8f0", boxShadow: "0 1px 4px rgba(0,0,0,0.05), 0 4px 16px rgba(0,0,0,0.04)" }}
+      >
+        <div className="flex items-center justify-between border-b border-[#f1f5f9] px-6 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <BarChart2 size={15} className="text-[#16a34a]" />
+              <h2 className="font-black text-[#0f172a]">Faturamento — 7 dias</h2>
+            </div>
+            <p className="text-xs text-[#94a3b8]">Total: {fmtBRL(totalRevenue7d)} (excluindo cancelados)</p>
+          </div>
+        </div>
+        <div className="px-6 pb-4 pt-5">
+          <div className="flex items-end gap-2" style={{ height: 120 }}>
+            {revenueByDay.map((d) => {
+              const heightPct = maxRevenue > 0 ? (d.revenue / maxRevenue) * 100 : 0;
+              return (
+                <div key={d.label + d.day} className="group relative flex flex-1 flex-col items-center gap-1">
+                  {/* Tooltip */}
+                  {d.revenue > 0 && (
+                    <div className="pointer-events-none absolute bottom-full mb-2 hidden rounded-xl border border-[#e2e8f0] bg-white px-2.5 py-1.5 text-center shadow-lg group-hover:block"
+                      style={{ minWidth: 80, zIndex: 10 }}
+                    >
+                      <p className="text-[10px] font-black text-[#0f172a]">{fmtBRL(d.revenue)}</p>
+                      <p className="text-[9px] text-[#94a3b8]">{d.count} pedido{d.count !== 1 ? "s" : ""}</p>
+                    </div>
+                  )}
+                  <div className="flex w-full flex-col items-center justify-end" style={{ height: 96 }}>
+                    <div
+                      className="w-full rounded-t-lg transition-all duration-300"
+                      style={{
+                        height: `${Math.max(heightPct, d.revenue > 0 ? 4 : 0)}%`,
+                        background: d.isToday
+                          ? "linear-gradient(180deg, #16a34a, #15803d)"
+                          : "#e2e8f0",
+                        minHeight: d.revenue > 0 ? 4 : 0,
+                      }}
+                    />
+                  </div>
+                  <p className="text-[10px] font-bold capitalize" style={{ color: d.isToday ? "#16a34a" : "#94a3b8" }}>
+                    {d.label}
+                  </p>
+                  <p className="text-[9px] font-bold" style={{ color: d.isToday ? "#15803d" : "#cbd5e1" }}>
+                    {d.day}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Recent orders */}

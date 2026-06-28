@@ -206,6 +206,7 @@ export async function updateStoreProduct(
     stock: number;
     available: boolean;
     imageAlt?: string;
+    category?: string;
   }
 ): Promise<StoreProduct> {
   const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${id}`, {
@@ -494,6 +495,14 @@ export async function removeStoreProduct(id: string): Promise<{ softDeleted: boo
   }
 
   return response.json();
+}
+
+export async function toggleStoreOpen(storeId: string, isOpen: boolean): Promise<void> {
+  const response = await authFetch(`${GIZ_API_URL}/api/stores/${storeId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ isOpen }),
+  });
+  if (!response.ok) throw new Error("Erro ao atualizar status da loja");
 }
 
 export async function updateStoreProductImage(

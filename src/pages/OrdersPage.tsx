@@ -115,7 +115,13 @@ export default function OrdersPage() {
     if (statusFilter === "cancelled") result = result.filter((o) => o.status === 5);
 
     const q = search.trim().toLowerCase();
-    if (q) result = result.filter((o) => o.customerName.toLowerCase().includes(q));
+    if (q) result = result.filter((o) =>
+      o.customerName.toLowerCase().includes(q) ||
+      o.customerPhone.includes(q) ||
+      o.deliveryAddress.toLowerCase().includes(q) ||
+      o.deliveryNeighborhood.toLowerCase().includes(q) ||
+      o.id.toLowerCase().startsWith(q)
+    );
 
     return result;
   }, [orders, statusFilter, dateFilter, search]);
@@ -167,7 +173,7 @@ export default function OrdersPage() {
         <input
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Buscar por nome do cliente…"
+          placeholder="Buscar por nome, telefone, endereço ou bairro…"
           className="w-full bg-transparent text-sm font-semibold text-[#0f172a] outline-none placeholder:text-[#cbd5e1]"
         />
         {search && (
