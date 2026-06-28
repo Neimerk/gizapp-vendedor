@@ -73,7 +73,7 @@ const PLANS_PREVIEW = [
     period: "/mês",
     badge: "Mais popular",
     highlight: true,
-    features: ["300 produtos", "30 destaques", "Categorias ilimitadas", "Até 10 lojas", "API + Relatórios"],
+    features: ["1.000 produtos", "30 destaques", "Categorias ilimitadas", "Até 10 lojas", "API + Relatórios"],
   },
   {
     name: "White Label",
