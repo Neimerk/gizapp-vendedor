@@ -86,7 +86,7 @@ const PLANS_PREVIEW = [
 ];
 
 const STATS = [
-  { value: "500+", label: "lojas ativas" },
+  { value: "2 min", label: "para abrir sua loja" },
   { value: "15k+", label: "pedidos/mês" },
   { value: "99,9%", label: "de uptime" },
   { value: "< 50ms", label: "latência média" },
