@@ -198,6 +198,7 @@ export default function LoginPage() {
       saveAuth(auth);
       registerAttempt(true);
       const saved = getAuth();
+      window.scrollTo({ top: 0, behavior: "instant" });
       navigate(saved?.role === "Courier" && !saved?.storeId ? "/entregas" : "/");
     } catch (err) {
       registerAttempt(false);
