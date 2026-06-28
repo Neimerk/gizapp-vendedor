@@ -8,6 +8,7 @@ import OrdersPage from "../pages/OrdersPage";
 import CourierPage from "../pages/CourierPage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
+import PlansPage from "../pages/PlansPage";
 
 import { getAuth } from "../services/auth";
 
@@ -27,6 +28,10 @@ export const router = createBrowserRouter([
   {
     path: "/cadastro",
     element: <RegisterPage />,
+  },
+  {
+    path: "/planos",
+    element: <PlansPage />,
   },
   {
     path: "/",
