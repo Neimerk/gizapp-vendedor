@@ -57,7 +57,7 @@ const PLANS_PREVIEW = [
     period: "/mês",
     badge: null,
     highlight: false,
-    features: ["30 produtos", "3 destaques", "3 categorias", "1 loja"],
+    features: ["50 produtos", "3 destaques", "3 categorias", "1 loja"],
   },
   {
     name: "Básico",
@@ -65,7 +65,7 @@ const PLANS_PREVIEW = [
     period: "/mês",
     badge: null,
     highlight: false,
-    features: ["100 produtos", "15 destaques", "15 categorias", "Até 3 lojas"],
+    features: ["300 produtos", "15 destaques", "15 categorias", "Até 3 lojas"],
   },
   {
     name: "Premium",

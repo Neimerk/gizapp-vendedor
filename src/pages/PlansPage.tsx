@@ -36,7 +36,7 @@ const PLANS: Plan[] = [
     ctaStyle: "outline",
     color: "#64748b",
     features: [
-      "30 produtos ativos",
+      "50 produtos ativos",
       "3 destaques no Shopping",
       "3 categorias de loja",
       "1 loja",
@@ -59,7 +59,7 @@ const PLANS: Plan[] = [
     ctaStyle: "secondary",
     color: "#16a34a",
     features: [
-      "100 produtos ativos",
+      "300 produtos ativos",
       "15 destaques no Shopping",
       "15 categorias de loja",
       "Até 3 lojas por CPF/CNPJ",
@@ -84,7 +84,7 @@ const PLANS: Plan[] = [
     ctaStyle: "primary",
     color: "#16a34a",
     features: [
-      "300 produtos ativos",
+      "1.000 produtos ativos",
       "30 destaques no Shopping",
       "Categorias ilimitadas",
       "Até 10 lojas por CPF/CNPJ",
@@ -143,7 +143,7 @@ type CompareRow = {
 };
 
 const COMPARE: CompareRow[] = [
-  { icon: Package, category: "Catálogo", label: "Produtos ativos", free: "30", basic: "100", premium: "300", white: "Ilimitado" },
+  { icon: Package, category: "Catálogo", label: "Produtos ativos", free: "50", basic: "300", premium: "1.000", white: "Ilimitado" },
   { label: "Categorias de loja", free: "3", basic: "15", premium: "Ilimitadas", white: "Ilimitadas" },
   { icon: Star, category: "Vitrine", label: "Destaques no Shopping", free: "3", basic: "15", premium: "30", white: "Ilimitados" },
   { icon: Store, category: "Lojas", label: "Lojas por CPF/CNPJ", free: "1", basic: "Até 3", premium: "Até 10", white: "Ilimitadas" },
