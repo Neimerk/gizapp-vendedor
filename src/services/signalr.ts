@@ -1,4 +1,4 @@
-import { AUTH_STORAGE_KEY } from "./auth";
+import { getAuthToken } from "./auth";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5003";
 
@@ -34,10 +34,12 @@ class WsHub {
 
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
-      const token = raw ? (JSON.parse(raw)?.token as string | undefined) : null;
+      const token = getAuthToken();
       if (!token) { reject(new Error("No auth token")); return; }
 
+      // NOTA: token no query param mantém compat com o backend atual.
+      // TODO: quando o Worker suportar auth via primeiro frame WebSocket,
+      // remover o ?token= da URL e enviar apenas no onopen via send({type:"Auth",token}).
       const wsUrl = API_URL.replace(/^http/, "ws") + `/ws?token=${encodeURIComponent(token)}`;
       this.ws = new WebSocket(wsUrl);
       this.shouldReconnect = true;
@@ -49,14 +51,16 @@ class WsHub {
         try {
           const { type, data } = JSON.parse(e.data as string) as { type: string; data: unknown };
           this.listeners.get(type)?.forEach((cb) => cb(data));
-        } catch { /* ignore malformed messages */ }
+        } catch {
+          // ignora frames malformados
+        }
       };
 
       this.ws.onclose = () => {
         this.onDisconnect?.();
         if (this.shouldReconnect) {
           this.reconnectTimer = setTimeout(() => {
-            this.start().catch(() => { /* silent retry */ });
+            this.start().catch(() => { /* reconexão silenciosa */ });
           }, 4000);
         }
       };

@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { registerStore } from "../services/gizApi";
 import { saveAuth } from "../services/auth";
+import { validatePassword } from "../utils/passwordValidator";
 
 // ── Máscara e validação ───────────────────────────────────────────────────────
 
@@ -35,14 +36,39 @@ function validateCPF(d: string): boolean {
 
 function validateCNPJ(d: string): boolean {
   if (/^(\d)\1+$/.test(d)) return false;
-  const w1 = [5,4,3,2,9,8,7,6,5,4,3,2];
-  const w2 = [6,5,4,3,2,9,8,7,6,5,4,3,2];
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
   let s = w1.reduce((a, w, i) => a + +d[i] * w, 0);
   let r = s % 11 < 2 ? 0 : 11 - (s % 11);
   if (r !== +d[12]) return false;
   s = w2.reduce((a, w, i) => a + +d[i] * w, 0);
   r = s % 11 < 2 ? 0 : 11 - (s % 11);
   return r === +d[13];
+}
+
+// ── Indicador de força ────────────────────────────────────────────────────────
+
+function PasswordStrengthBar({ password }: { password: string }) {
+  if (!password) return null;
+  const { score, label, color, errors } = validatePassword(password);
+  const pct = ((score + 1) / 5) * 100;
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#e2e8f0]">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${pct}%`, background: color }}
+        />
+      </div>
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-black" style={{ color }}>{label}</p>
+        {errors.length > 0 && (
+          <p className="text-[10px] text-[#94a3b8]">{errors[0]}</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -79,8 +105,10 @@ export default function RegisterPage() {
       setError("As senhas não coincidem.");
       return;
     }
-    if (password.length < 6) {
-      setError("A senha deve ter pelo menos 6 caracteres.");
+
+    const pwStrength = validatePassword(password);
+    if (!pwStrength.valid) {
+      setError(pwStrength.errors[0] ?? "Senha inválida.");
       return;
     }
 
@@ -164,7 +192,6 @@ export default function RegisterPage() {
               {/* CPF / CNPJ */}
               <div>
                 <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#94a3b8]">Documento</label>
-                {/* Toggle */}
                 <div className="mb-2 flex gap-1 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-1">
                   {(["cpf", "cnpj"] as const).map(t => (
                     <button
@@ -205,19 +232,46 @@ export default function RegisterPage() {
               <div>
                 <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#94a3b8]">Senha</label>
                 <div className="relative">
-                  <input value={password} onChange={e => setPassword(e.target.value)} type={showPass ? "text" : "password"} required autoComplete="new-password" placeholder="Mínimo 6 caracteres" className={`${inputCls} pr-11`} />
-                  <button type="button" onClick={() => setShowPass(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b]">
+                  <input
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    type={showPass ? "text" : "password"}
+                    required
+                    autoComplete="new-password"
+                    placeholder="Mínimo 8 caracteres"
+                    className={`${inputCls} pr-11`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b]"
+                    aria-label={showPass ? "Ocultar senha" : "Mostrar senha"}
+                  >
                     {showPass ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>
+                <PasswordStrengthBar password={password} />
               </div>
 
               {/* Confirmar senha */}
               <div>
                 <label className="mb-1.5 block text-xs font-black uppercase tracking-wide text-[#94a3b8]">Confirmar senha</label>
                 <div className="relative">
-                  <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} type={showConfirm ? "text" : "password"} required autoComplete="new-password" placeholder="Repita a senha" className={`${inputCls} pr-11`} />
-                  <button type="button" onClick={() => setShowConfirm(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b]">
+                  <input
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    type={showConfirm ? "text" : "password"}
+                    required
+                    autoComplete="new-password"
+                    placeholder="Repita a senha"
+                    className={`${inputCls} pr-11`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94a3b8] hover:text-[#64748b]"
+                    aria-label={showConfirm ? "Ocultar confirmação" : "Mostrar confirmação"}
+                  >
                     {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
                   </button>
                 </div>

@@ -1,4 +1,4 @@
-import { getAuth, getAuthToken, logout } from "./auth";
+import { getAuth, getAuthToken, isTokenExpired, logout } from "./auth";
 
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
@@ -8,22 +8,66 @@ export const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.de
 const IMAGE_BASE_URL: string =
   import.meta.env.VITE_IMAGE_BASE_URL || IMAGE_WORKER_URL;
 
-export const DEFAULT_STORE_ID =
-  "b5c148b0-a07b-4532-aca3-e66c12f389af";
-
-export function getSellerStoreId() {
-  return getAuth()?.storeId || DEFAULT_STORE_ID;
+// Lança em vez de usar fallback — evita cross-tenant leak via DEFAULT_STORE_ID
+export function getSellerStoreId(): string {
+  const storeId = getAuth()?.storeId;
+  if (!storeId) throw new Error("Nenhuma loja associada a este usuário.");
+  return storeId;
 }
 
+// ── Cache multi-tenant seguro ────────────────────────────────────────────────
+// Chaveado por storeId — evita leak entre tenants ao trocar de usuário no mesmo tab
+
+class ProductsCache {
+  private readonly entries = new Map<string, { data: StoreProduct[]; ts: number }>();
+  private readonly TTL = 60_000;
+
+  get(storeId: string): StoreProduct[] | null {
+    const e = this.entries.get(storeId);
+    if (!e || Date.now() - e.ts > this.TTL) { this.entries.delete(storeId); return null; }
+    return e.data;
+  }
+
+  set(storeId: string, data: StoreProduct[]): void {
+    this.entries.set(storeId, { data, ts: Date.now() });
+  }
+
+  invalidate(storeId?: string): void {
+    if (storeId) this.entries.delete(storeId);
+    else this.entries.clear();
+  }
+}
+
+const _cache = new ProductsCache();
+
+export function invalidateProductsCache(storeId?: string): void {
+  _cache.invalidate(storeId);
+}
+
+// Limpa todos os caches ao fazer logout (evita cross-tenant leak)
+export function clearAllCaches(): void {
+  _cache.invalidate();
+}
+
+// ── HTTP autenticado ─────────────────────────────────────────────────────────
 
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = getAuthToken();
+  if (!token || isTokenExpired()) {
+    logout();
+    window.location.href = "/login";
+    return new Response(null, { status: 401 });
+  }
+
   const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${getAuthToken()}`,
+    Authorization: `Bearer ${token}`,
     ...(isFormData ? {} : { "Content-Type": "application/json" }),
     ...(options.headers as Record<string, string>),
   };
+
   const response = await fetch(url, { ...options, headers });
+
   if (response.status === 401) {
     logout();
     window.location.href = "/login";
@@ -64,6 +108,15 @@ export type Store = {
   updatedAt: string;
 };
 
+// Somente campos que o lojista pode alterar — evita mass assignment
+export type UpdateStorePayload = Pick<
+  Store,
+  | "name" | "category" | "description" | "logoUrl" | "bannerUrl"
+  | "phone" | "whatsapp" | "email" | "address" | "number" | "complement"
+  | "neighborhood" | "city" | "state" | "zipCode"
+  | "deliveryFee" | "deliveryTimeMin" | "deliveryTimeMax" | "isOpen"
+>;
+
 /* =========================
    STORE PRODUCT
 ========================= */
@@ -100,16 +153,12 @@ export type LoginPayload = {
 export async function loginSeller(payload: LoginPayload) {
   const response = await fetch(`${GIZ_API_URL}/api/auth/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
   if (!response.ok) {
     throw new Error("Email ou senha inválidos.");
   }
-
   return response.json();
 }
 
@@ -128,12 +177,10 @@ export async function registerStore(payload: RegisterStorePayload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.message || "Erro ao criar conta. Verifique os dados e tente novamente.");
   }
-
   return response.json();
 }
 
@@ -141,24 +188,19 @@ export async function registerStore(payload: RegisterStorePayload) {
    STORES API
 ========================= */
 
-export async function getStoreById(storeId: string = getSellerStoreId()): Promise<Store> {
-  const response = await fetch(`${GIZ_API_URL}/api/stores/${storeId}`, {
+export async function getStoreById(storeId: string): Promise<Store> {
+  const response = await authFetch(`${GIZ_API_URL}/api/stores/${storeId}`, {
     cache: "no-store",
   });
-
-  if (!response.ok) {
-    throw new Error("Erro ao buscar loja");
-  }
-
+  if (!response.ok) throw new Error("Erro ao buscar loja");
   return response.json();
 }
 
-export async function updateStore(id: string, data: Store): Promise<void> {
+export async function updateStore(id: string, data: UpdateStorePayload): Promise<void> {
   const response = await authFetch(`${GIZ_API_URL}/api/stores/${id}`, {
     method: "PUT",
     body: JSON.stringify(data),
   });
-
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     throw new Error(body?.message || `Erro ao atualizar loja (${response.status})`);
@@ -169,32 +211,20 @@ export async function updateStore(id: string, data: Store): Promise<void> {
    STORE PRODUCTS API
 ========================= */
 
-type ProductsCache = { storeId: string; data: StoreProduct[]; ts: number };
-let _productsCache: ProductsCache | null = null;
-const PRODUCTS_CACHE_TTL = 60_000;
-
-export function invalidateProductsCache(): void {
-  _productsCache = null;
-}
-
 export async function getStoreProducts(
   storeId: string = getSellerStoreId(),
   fresh = false,
 ): Promise<StoreProduct[]> {
-  const now = Date.now();
-  if (
-    !fresh &&
-    _productsCache?.storeId === storeId &&
-    now - _productsCache.ts < PRODUCTS_CACHE_TTL
-  ) {
-    return _productsCache.data;
+  if (!fresh) {
+    const cached = _cache.get(storeId);
+    if (cached) return cached;
   }
-  const response = await fetch(`${GIZ_API_URL}/api/storeproducts/${storeId}`, {
+  const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${storeId}`, {
     cache: "no-store",
   });
   if (!response.ok) throw new Error("Erro ao buscar produtos da loja");
   const data: StoreProduct[] = await response.json();
-  _productsCache = { storeId, data, ts: now };
+  _cache.set(storeId, data);
   return data;
 }
 
@@ -213,11 +243,7 @@ export async function updateStoreProduct(
     method: "PATCH",
     body: JSON.stringify(data),
   });
-
-  if (!response.ok) {
-    throw new Error("Erro ao atualizar produto");
-  }
-
+  if (!response.ok) throw new Error("Erro ao atualizar produto");
   return response.json();
 }
 
@@ -269,12 +295,6 @@ export async function getOrders(): Promise<Order[]> {
   return response.json();
 }
 
-export async function getAllOrders(): Promise<Order[]> {
-  const response = await authFetch(`${GIZ_API_URL}/api/orders/store/${DEFAULT_STORE_ID}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Erro ao buscar entregas");
-  return response.json();
-}
-
 export async function getAvailableDeliveries(): Promise<Order[]> {
   const response = await authFetch(`${GIZ_API_URL}/api/orders/courier/available`, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao buscar entregas disponíveis");
@@ -301,11 +321,7 @@ export async function updateOrderStatus(id: string, status: number) {
     method: "PATCH",
     body: JSON.stringify({ status }),
   });
-
-  if (!response.ok) {
-    throw new Error("Erro ao atualizar pedido");
-  }
-
+  if (!response.ok) throw new Error("Erro ao atualizar pedido");
   return response.json();
 }
 
@@ -315,9 +331,7 @@ export async function updateOrderStatus(id: string, status: number) {
 
 export function getProductImageUrl(imageUrl?: string) {
   if (!imageUrl) return "/placeholder.png";
-
   if (imageUrl.startsWith("http")) return imageUrl;
-
   const base = IMAGE_BASE_URL.replace(/\/$/, "");
   const path = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
   return `${base}${path}`;
@@ -345,6 +359,7 @@ export type CatalogProductsResponse = {
   totalPages: number;
 };
 
+// Sync autenticado — evita product injection por terceiros
 export async function syncProductToShopping(product: {
   name: string; slug: string; category: string;
   subCategory?: string | null; brand?: string | null;
@@ -354,18 +369,22 @@ export async function syncProductToShopping(product: {
   featured?: boolean;
   storeId?: string; storeName?: string;
 }): Promise<void> {
-  await fetch(`${IMAGE_WORKER_URL}/sync`, {
+  await authFetch(`${IMAGE_WORKER_URL}/sync`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(product),
-  }).catch(() => {});
+  }).catch((e) => {
+    console.warn("[sync-shopping] falha silenciosa:", e);
+  });
 }
 
 export async function removeProductFromShopping(slug: string, storeId?: string): Promise<void> {
   const params = storeId ? `?storeId=${encodeURIComponent(storeId)}` : "";
-  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}${params}`, {
+  await authFetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}${params}`, {
     method: "DELETE",
-  }).catch(() => {});
+  }).catch((e) => {
+    console.warn("[remove-shopping] falha silenciosa:", e);
+  });
 }
 
 export async function getFeaturedSlugs(storeId?: string): Promise<string[]> {
@@ -380,47 +399,30 @@ export async function getFeaturedSlugs(storeId?: string): Promise<string[]> {
 }
 
 export async function toggleFeaturedInShopping(slug: string, featured: boolean, storeId?: string): Promise<void> {
-  await fetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}/featured`, {
+  await authFetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}/featured`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ featured, storeId }),
-  }).catch(() => {});
+  }).catch((e) => {
+    console.warn("[toggle-featured] falha silenciosa:", e);
+  });
 }
 
 export async function getWorkerImages(search = ""): Promise<CatalogProduct[]> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
-
-  const response = await fetch(`${IMAGE_WORKER_URL}/images?${params}`, {
-    cache: "no-store",
-  });
-
+  const response = await fetch(`${IMAGE_WORKER_URL}/images?${params}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Erro ao carregar banco de imagens.");
-
   const data = await response.json() as { items: CatalogProduct[] };
   return data.items.filter((p) => p.imageUrl);
 }
 
 export async function getCatalogProducts(search = ""): Promise<CatalogProduct[]> {
-  const params = new URLSearchParams({
-    page: "1",
-    pageSize: "100",
-  });
-
-  if (search.trim()) {
-    params.set("search", search.trim());
-  }
-
-  const response = await authFetch(`${GIZ_API_URL}/api/products?${params}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error("Erro ao buscar catálogo global.");
-  }
-
+  const params = new URLSearchParams({ page: "1", pageSize: "100" });
+  if (search.trim()) params.set("search", search.trim());
+  const response = await authFetch(`${GIZ_API_URL}/api/products?${params}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Erro ao buscar catálogo global.");
   const data = (await response.json()) as CatalogProductsResponse;
-
   return data.items;
 }
 
@@ -450,29 +452,24 @@ export async function addProductFromCatalog(productId: string) {
     method: "POST",
     body: JSON.stringify({ storeId: getSellerStoreId(), productId }),
   });
-
   if (!response.ok) {
     const error = await response.json().catch(() => null);
     throw new Error(error?.message || "Erro ao adicionar produto à loja.");
   }
-
   return response.json();
 }
 
 export async function uploadProductImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("file", file);
-
-  const response = await fetch(`${IMAGE_WORKER_URL}/upload`, {
+  const response = await authFetch(`${IMAGE_WORKER_URL}/upload`, {
     method: "POST",
     body: formData,
   });
-
   if (!response.ok) {
     const error = await response.json().catch(() => null);
     throw new Error(error?.message || "Erro ao enviar imagem.");
   }
-
   const data = await response.json();
   return data.imageUrl;
 }
@@ -486,14 +483,8 @@ export async function clearStoreProducts(storeId: string): Promise<{ removed: nu
 }
 
 export async function removeStoreProduct(id: string): Promise<{ softDeleted: boolean }> {
-  const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${id}`, {
-    method: "DELETE",
-  });
-
-  if (!response.ok) {
-    throw new Error("Erro ao remover produto da loja.");
-  }
-
+  const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${id}`, { method: "DELETE" });
+  if (!response.ok) throw new Error("Erro ao remover produto da loja.");
   return response.json();
 }
 
@@ -505,16 +496,10 @@ export async function toggleStoreOpen(storeId: string, isOpen: boolean): Promise
   if (!response.ok) throw new Error("Erro ao atualizar status da loja");
 }
 
-export async function updateStoreProductImage(
-  id: string,
-  imageUrl: string
-): Promise<void> {
+export async function updateStoreProductImage(id: string, imageUrl: string): Promise<void> {
   const response = await authFetch(`${GIZ_API_URL}/api/storeproducts/${id}/image`, {
     method: "PATCH",
     body: JSON.stringify({ imageUrl }),
   });
-
-  if (!response.ok) {
-    throw new Error("Erro ao salvar imagem do produto.");
-  }
+  if (!response.ok) throw new Error("Erro ao salvar imagem do produto.");
 }

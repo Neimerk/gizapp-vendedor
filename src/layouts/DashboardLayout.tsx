@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -8,6 +8,7 @@ import {
   Settings, BarChart3, Bell, Search,
 } from "lucide-react";
 import { getAuth, logout } from "../services/auth";
+import { clearAllCaches } from "../services/gizApi";
 import { useOrdersStore } from "../stores/ordersStore";
 import OrderToast from "../components/ui/OrderToast";
 
@@ -118,15 +119,15 @@ export default function DashboardLayout() {
     toastVisible, toastMessage, dismissToast, wsStatus, orders,
   } = useOrdersStore();
 
-  // init once
-  useState(() => {
+  useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
     fetchOrders();
     initSignalR();
     return teardownSignalR;
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isCourier = auth?.role === "Courier";
   const isSeller  = auth?.role === "Seller" || auth?.role === "Admin";
@@ -252,7 +253,7 @@ export default function DashboardLayout() {
           </div>
         </div>
         <button
-          onClick={() => { logout(); navigate("/login"); }}
+          onClick={() => { clearAllCaches(); logout(); navigate("/login"); }}
           className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold text-white/35 transition-colors hover:bg-white/8 hover:text-white/65"
         >
           <LogOut size={12} /> Sair

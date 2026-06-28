@@ -6,22 +6,16 @@ import {
   updateStore,
   uploadProductImage,
   type Store,
+  type UpdateStorePayload,
 } from "../services/gizApi";
 import { getAuth } from "../services/auth";
+import { sanitizeText, sanitizeUF } from "../utils/sanitize";
 import { categories } from "../data/categories";
 import { categoryIcons } from "../data/categoryIcons";
 
 const inputCls =
   "w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30 placeholder:text-[#cbd5e1]";
 
-function formatDocument(digits: string): string {
-  const d = digits.replace(/\D/g, "");
-  if (d.length === 11)
-    return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-  if (d.length === 14)
-    return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
-  return digits;
-}
 
 export default function StoreSettingsPage() {
   const [store, setStore] = useState<Store | null>(null);
@@ -77,10 +71,10 @@ export default function StoreSettingsPage() {
         setStore({
           ...store,
           zipCode: cep,
-          address: data.logradouro || store.address || "",
-          neighborhood: data.bairro || store.neighborhood || "",
-          city: data.localidade || store.city || "",
-          state: data.uf || store.state || "",
+          address: sanitizeText(data.logradouro) || store.address || "",
+          neighborhood: sanitizeText(data.bairro) || store.neighborhood || "",
+          city: sanitizeText(data.localidade) || store.city || "",
+          state: sanitizeUF(data.uf) || store.state || "",
         });
       }
     } catch {
@@ -127,9 +121,30 @@ export default function StoreSettingsPage() {
     setSaveError(null);
     try {
       setSaving(true);
-      const updated = { ...store, category: selectedTypes.join(",") };
-      await updateStore(store.id, updated);
-      setStore(updated);
+      // Payload restrito — exclui campos server-managed (rating, featured, active, etc.)
+      const payload: UpdateStorePayload = {
+        name: store.name,
+        description: store.description,
+        category: selectedTypes.join(","),
+        phone: store.phone,
+        whatsapp: store.whatsapp,
+        email: store.email,
+        address: store.address,
+        number: store.number,
+        complement: store.complement,
+        neighborhood: store.neighborhood,
+        city: store.city,
+        state: store.state,
+        zipCode: store.zipCode,
+        deliveryFee: store.deliveryFee,
+        deliveryTimeMin: store.deliveryTimeMin,
+        deliveryTimeMax: store.deliveryTimeMax,
+        isOpen: store.isOpen,
+        logoUrl: store.logoUrl,
+        bannerUrl: store.bannerUrl,
+      };
+      await updateStore(store.id, payload);
+      setStore({ ...store, category: selectedTypes.join(",") });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     } catch (error) {
@@ -326,17 +341,17 @@ export default function StoreSettingsPage() {
           <h2 className="text-base font-black text-[#0f172a]">Informações básicas</h2>
         </div>
 
-        {/* CPF/CNPJ do responsável — somente leitura */}
+        {/* Documento do responsável — exibe versão mascarada (nunca o número completo) */}
         {(() => {
           const auth = getAuth();
-          const doc = auth?.cpf ? formatDocument(auth.cpf) : null;
-          const label = auth?.cpf?.replace(/\D/g, "").length === 14 ? "CNPJ" : "CPF";
-          if (!doc) return null;
+          const masked = auth?.documentMasked;
+          const label = (auth?.documentType ?? "cpf").toUpperCase();
+          if (!masked) return null;
           return (
             <div className="mb-5 flex items-center gap-3 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">{label} do responsável</p>
-                <p className="mt-0.5 font-black text-[#0f172a]">{doc}</p>
+                <p className="mt-0.5 font-black text-[#0f172a]">{masked}</p>
               </div>
               <span className="shrink-0 rounded-full bg-[#f0fdf4] px-2.5 py-1 text-[10px] font-black text-[#16a34a] ring-1 ring-[#16a34a]/20">
                 Verificado

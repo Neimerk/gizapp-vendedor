@@ -7,16 +7,27 @@ export type ProcessedImage = {
   height: number;
 };
 
-const MAX_DIM = 1200;    // px — lado máximo da imagem final
+const MAX_DIM = 1200;
 const WEBP_QUALITY = 0.85;
+const MAX_INPUT_BYTES = 20 * 1024 * 1024; // 20 MB
 
-/**
- * Recebe qualquer File de imagem, redimensiona para no máximo MAX_DIM×MAX_DIM
- * mantendo o aspect ratio, converte para WebP e retorna metadados de comparação.
- * Todo o processamento é local (Canvas API) — zero bytes extras trafegam antes
- * do arquivo já otimizado.
- */
+// MIME types aceitos — validados por conteúdo no backend, por tipo aqui no cliente
+const ACCEPTED_TYPES = new Set([
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "image/heic", "image/heif", "image/avif",
+  "", // HEIC/HEIF em alguns browsers retorna string vazia
+]);
+
 export async function processToWebP(source: File): Promise<ProcessedImage> {
+  if (source.size > MAX_INPUT_BYTES) {
+    throw new Error(
+      `Arquivo muito grande (${fmtBytes(source.size)}). Limite: ${fmtBytes(MAX_INPUT_BYTES)}.`
+    );
+  }
+  if (!ACCEPTED_TYPES.has(source.type)) {
+    throw new Error(`Tipo de arquivo não suportado: ${source.type || "desconhecido"}.`);
+  }
+
   const originalBytes = source.size;
   const img = await decodeImage(source);
 

@@ -160,12 +160,13 @@ export default function DashboardPage() {
   const [toggling, setToggling] = useState(false);
 
   useEffect(() => {
-    if (!canSell) return;
+    if (!canSell || !auth?.storeId) { setLocalLoading(false); return; }
+    const storeId = auth.storeId;
     (async () => {
       try {
         const [p, s] = await Promise.all([
-          getStoreProducts(),
-          auth?.storeId ? getStoreById(auth.storeId) : Promise.resolve(null),
+          getStoreProducts(storeId),
+          getStoreById(storeId),
         ]);
         setProducts(p);
         setStore(s);
@@ -175,6 +176,7 @@ export default function DashboardPage() {
         setLocalLoading(false);
       }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canSell]);
 
   const handleToggleOpen = useCallback(async () => {
