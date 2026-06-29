@@ -339,7 +339,7 @@ function UploadTab({
                 src={getProductImageUrl(currentImageUrl)}
                 alt="Imagem atual"
                 className="h-14 w-14 rounded-xl object-cover"
-                onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/placeholder.svg"; }}
               />
               <div>
                 <p className="text-xs font-black text-[#0f172a]">Imagem atual</p>
@@ -670,7 +670,7 @@ function BankTab({
               src={getProductImageUrl(selected.imageUrl)}
               alt={selected.imageAlt || selected.name}
               className="h-12 w-12 shrink-0 rounded-xl object-cover"
-              onError={(e) => { e.currentTarget.src = "/placeholder.png"; }}
+              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/placeholder.svg"; }}
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black text-[#0f172a]">{selected.name}</p>

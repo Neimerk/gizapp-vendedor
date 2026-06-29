@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, CheckCircle2, ImageIcon, Loader2, MapPin, Store as StoreIcon, Upload, X } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, CheckCircle2, ImageIcon, Loader2, MapPin, Store as StoreIcon, Upload, X, Trash2, AlertTriangle } from "lucide-react";
 
 import {
   getStoreById,
   updateStore,
   uploadProductImage,
+  deleteAccount,
   type Store,
   type UpdateStorePayload,
 } from "../services/gizApi";
-import { getAuth } from "../services/auth";
+import { getAuth, logout } from "../services/auth";
+import { clearAllCaches } from "../services/gizApi";
 import { sanitizeText, sanitizeUF } from "../utils/sanitize";
 import { categories } from "../data/categories";
 import { categoryIcons } from "../data/categoryIcons";
@@ -18,11 +21,18 @@ const inputCls =
 
 
 export default function StoreSettingsPage() {
+  const navigate = useNavigate();
   const [store, setStore] = useState<Store | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Delete account state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [cepLoading, setCepLoading] = useState(false);
   const [bannerUploading, setBannerUploading] = useState(false);
   const [bannerUploadError, setBannerUploadError] = useState<string | null>(null);
@@ -151,6 +161,20 @@ export default function StoreSettingsPage() {
       setSaveError(error instanceof Error ? error.message : "Erro ao atualizar loja.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount();
+      clearAllCaches();
+      logout();
+      navigate("/login");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Erro ao excluir conta.");
+      setDeleting(false);
     }
   }
 
@@ -664,6 +688,84 @@ export default function StoreSettingsPage() {
         <div className="flex items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50 px-4 py-3">
           <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500" />
           <p className="text-sm font-semibold text-red-700">{saveError}</p>
+        </div>
+      )}
+
+      {/* Danger zone */}
+      <div className="rounded-3xl border border-red-100 bg-red-50/40 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-red-100">
+            <AlertTriangle size={15} className="text-red-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-red-700">Zona de Perigo</h2>
+            <p className="text-xs text-red-500">Ações irreversíveis</p>
+          </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-100 bg-white p-4">
+          <div>
+            <p className="text-sm font-black text-[#0f172a]">Excluir minha conta</p>
+            <p className="mt-0.5 text-xs text-[#64748b]">
+              Remove permanentemente sua conta, loja e todos os dados associados. Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { setShowDeleteModal(true); setDeleteConfirm(""); setDeleteError(null); }}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-black text-red-600 transition-colors hover:bg-red-100"
+          >
+            <Trash2 size={13} /> Excluir conta
+          </button>
+        </div>
+      </div>
+
+      {/* Delete confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(11,17,32,0.6)", backdropFilter: "blur(4px)" }}>
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-red-100">
+              <Trash2 size={22} className="text-red-600" />
+            </div>
+            <h2 className="text-xl font-black text-[#0f172a]">Excluir conta definitivamente?</h2>
+            <p className="mt-2 text-sm text-[#64748b]">
+              Todos os seus dados, produtos e histórico de pedidos serão removidos permanentemente.
+              Para confirmar, digite o nome da sua loja:
+            </p>
+            <p className="mt-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2 text-sm font-black text-[#0f172a]">
+              {store.name}
+            </p>
+            <input
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={`Digite "${store.name}"`}
+              className="mt-3 w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-red-300 placeholder:text-[#cbd5e1]"
+            />
+            {deleteError && (
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                <AlertCircle size={13} className="shrink-0 text-red-500" />
+                <p className="text-xs font-semibold text-red-700">{deleteError}</p>
+              </div>
+            )}
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== store.name || deleting}
+                className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-red-600 py-3 text-sm font-black text-white transition-colors hover:bg-red-700 disabled:opacity-40"
+              >
+                {deleting ? <><Loader2 size={14} className="animate-spin" /> Excluindo…</> : "Excluir conta"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

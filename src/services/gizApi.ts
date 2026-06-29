@@ -330,7 +330,7 @@ export async function updateOrderStatus(id: string, status: number) {
 ========================= */
 
 export function getProductImageUrl(imageUrl?: string) {
-  if (!imageUrl) return "/placeholder.png";
+  if (!imageUrl) return "/placeholder.svg";
   if (imageUrl.startsWith("http")) return imageUrl;
   const base = IMAGE_BASE_URL.replace(/\/$/, "");
   const path = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
@@ -502,4 +502,12 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
     body: JSON.stringify({ imageUrl }),
   });
   if (!response.ok) throw new Error("Erro ao salvar imagem do produto.");
+}
+
+export async function deleteAccount(): Promise<void> {
+  const response = await authFetch(`${GIZ_API_URL}/api/auth/me`, { method: "DELETE" });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message || `Erro ao excluir conta (${response.status})`);
+  }
 }

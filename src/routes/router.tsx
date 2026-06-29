@@ -9,6 +9,7 @@ import CourierPage from "../pages/CourierPage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import PlansPage from "../pages/PlansPage";
+import SalesReportPage from "../pages/SalesReportPage";
 
 import { getAuth } from "../services/auth";
 
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       { path: "pedidos", element: <OrdersPage /> },
       { path: "loja", element: <StoreSettingsPage /> },
       { path: "entregas", element: <CourierPage /> },
+      { path: "relatorios", element: <SalesReportPage /> },
     ],
   },
 ]);

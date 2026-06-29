@@ -99,11 +99,12 @@ function NavSection({ label }: { label: string }) {
 // ── Page title map ────────────────────────────────────────────────────────────
 
 const PAGE_TITLES: Record<string, string> = {
-  "/":        "Dashboard",
-  "/produtos":"Produtos",
-  "/pedidos": "Pedidos",
-  "/loja":    "Minha Loja",
-  "/entregas":"Entregas",
+  "/":           "Dashboard",
+  "/produtos":   "Produtos",
+  "/pedidos":    "Pedidos",
+  "/loja":       "Minha Loja",
+  "/entregas":   "Entregas",
+  "/relatorios": "Relatórios",
 };
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -190,6 +191,7 @@ export default function DashboardLayout() {
             )}
             <NavItem to="/produtos" icon={Package} label="Produtos" />
             <NavItem to="/pedidos" icon={ClipboardList} label="Pedidos" badge={pendingOrders > 0 ? pendingOrders : undefined} />
+            <NavItem to="/relatorios" icon={BarChart3} label="Relatórios" />
             <NavItem to="/" icon={Users} label="Clientes" soon />
             <NavItem to="/" icon={Wallet} label="Financeiro" soon />
             <NavItem to="/" icon={Tag} label="Cupons" soon />

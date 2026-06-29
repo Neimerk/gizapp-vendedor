@@ -701,7 +701,7 @@ function ProductCard({
               src={getProductImageUrl(product.imageUrl)}
               alt={product._imageAlt || product.name}
               className="h-full w-full object-contain"
-              onError={e => { e.currentTarget.src = "/placeholder.png"; }}
+              onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = "/placeholder.svg"; }}
             />
             {savingImage && (
               <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-white/80">
@@ -1041,7 +1041,7 @@ function AddProductModal({
                     src={getProductImageUrl(form.imageUrl)}
                     alt={form.name || "produto"}
                     className="mx-auto block h-36 w-full object-contain"
-                    onError={e => { e.currentTarget.src = "/placeholder.png"; }}
+                    onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = "/placeholder.svg"; }}
                   />
                   {/* Trocar imagem — 3 opções sobrepostas ao hover */}
                   <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity hover:opacity-100 rounded-2xl">
