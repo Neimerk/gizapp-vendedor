@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Package, ClipboardList, Store, Truck,
   LogOut, ExternalLink, Menu, X, ChevronRight,
   Users, Wallet, Tag, MapPin, UserCheck, Palette, Calendar,
-  Settings, BarChart3, Bell, Search,
+  Settings, BarChart3, Bell, Search, CreditCard,
 } from "lucide-react";
 import { getAuth, logout } from "../services/auth";
 import { clearAllCaches } from "../services/gizApi";
@@ -105,6 +105,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/loja":       "Minha Loja",
   "/entregas":   "Entregas",
   "/relatorios": "Relatórios",
+  "/plano":      "Plano e Assinatura",
 };
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -206,6 +207,7 @@ export default function DashboardLayout() {
         <NavSection label="Loja" />
         {canSell && <NavItem to="/loja" icon={Store} label="Minha Loja" />}
         {!canSell && <NavItem to="/loja" icon={Store} label="Ativar Loja" />}
+        <NavItem to="/plano" icon={CreditCard} label="Plano e Assinatura" />
         <NavItem to="/" icon={Palette} label="Aparência" soon />
         <NavItem to="/" icon={Calendar} label="Horários" soon />
         <NavItem to="/" icon={Settings} label="Configurações" soon />

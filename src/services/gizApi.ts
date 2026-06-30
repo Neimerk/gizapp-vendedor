@@ -504,6 +504,17 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
   if (!response.ok) throw new Error("Erro ao salvar imagem do produto.");
 }
 
+export async function changePlan(plan: "free" | "basic" | "premium"): Promise<void> {
+  const response = await authFetch(`${GIZ_API_URL}/api/auth/me/plan`, {
+    method: "PATCH",
+    body: JSON.stringify({ plan }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.message || `Erro ao alterar plano (${response.status})`);
+  }
+}
+
 export async function deleteAccount(): Promise<void> {
   const response = await authFetch(`${GIZ_API_URL}/api/auth/me`, { method: "DELETE" });
   if (!response.ok) {

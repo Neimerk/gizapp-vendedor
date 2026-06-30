@@ -10,6 +10,7 @@ import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
 import PlansPage from "../pages/PlansPage";
 import SalesReportPage from "../pages/SalesReportPage";
+import PlanManagementPage from "../pages/PlanManagementPage";
 
 import { getAuth } from "../services/auth";
 
@@ -45,6 +46,7 @@ export const router = createBrowserRouter([
       { path: "loja", element: <StoreSettingsPage /> },
       { path: "entregas", element: <CourierPage /> },
       { path: "relatorios", element: <SalesReportPage /> },
+      { path: "plano", element: <PlanManagementPage /> },
     ],
   },
 ]);

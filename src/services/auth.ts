@@ -77,6 +77,12 @@ export function isTokenExpired(): boolean {
   }
 }
 
+export function updateAuthPlan(plan: AuthUser["plan"]): void {
+  const auth = getAuth();
+  if (!auth) return;
+  sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...auth, plan }));
+}
+
 export function logout() {
   sessionStorage.removeItem(AUTH_STORAGE_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
