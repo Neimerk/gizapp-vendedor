@@ -4,11 +4,12 @@ const TOKEN_KEY = "brasux-loja-token";
 
 export type AuthUser = {
   id: string;
+  supabaseId?: string | null;
   name: string;
   email: string;
   role: "Admin" | "Customer" | "Seller" | "Courier";
   storeId?: string | null;
-  plan?: "free" | "basic" | "premium";
+  plan?: "free" | "start" | "pro" | "whitelabel";
   // documentMasked: "049.***.***-11" — nunca o número completo
   documentMasked?: string | null;
   documentType?: "cpf" | "cnpj" | null;
@@ -75,6 +76,12 @@ export function isTokenExpired(): boolean {
   } catch {
     return true;
   }
+}
+
+export function updateAuthSupabaseId(supabaseId: string): void {
+  const auth = getAuth();
+  if (!auth) return;
+  sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ ...auth, supabaseId }));
 }
 
 export function updateAuthPlan(plan: AuthUser["plan"]): void {

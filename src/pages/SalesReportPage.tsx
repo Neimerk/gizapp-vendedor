@@ -76,7 +76,7 @@ function UpsellScreen() {
       </div>
 
       <Link
-        to="/planos"
+        to="/plano"
         className="mt-8 flex items-center gap-2 rounded-2xl bg-gradient-to-r from-[#16a34a] to-[#15803d] px-6 py-3 text-sm font-black text-white shadow-lg shadow-[#16a34a]/25 transition-all hover:shadow-[#16a34a]/40 active:scale-[0.98]"
       >
         Ver planos <ArrowRight size={15} />
@@ -425,7 +425,7 @@ export default function SalesReportPage() {
         <div className="flex items-center gap-1.5 rounded-full border border-[#16a34a]/20 bg-[#f0fdf4] px-3 py-1">
           <Star size={10} className="text-[#16a34a]" />
           <span className="text-[10px] font-black text-[#16a34a] uppercase tracking-wide">
-            {auth?.plan === "premium" ? "Premium" : "Básico"} · Relatórios ativados
+            {auth?.plan === "whitelabel" ? "White Label" : auth?.plan === "pro" ? "Premium" : "Básico"} · Relatórios ativados
           </span>
         </div>
       </div>

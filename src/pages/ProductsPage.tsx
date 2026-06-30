@@ -77,9 +77,9 @@ const EMPTY_FORM: NewProductForm = {
 
 const PAGE_SIZE = 20;
 
-const PLAN_LIMITS      = { free: 30,  basic: 100, premium: 300      } as const;
-const FEATURED_LIMITS  = { free: 3,   basic: 15,  premium: 30       } as const;
-const CATEGORY_LIMITS  = { free: 3,   basic: 15,  premium: Infinity  } as const;
+const PLAN_LIMITS      = { free: 50,  start: 300,  pro: 1_000,  whitelabel: Infinity } as const;
+const FEATURED_LIMITS  = { free: 3,   start: 15,   pro: 30,     whitelabel: Infinity } as const;
+const CATEGORY_LIMITS  = { free: 3,   start: 15,   pro: Infinity, whitelabel: Infinity } as const;
 
 function toLocal(p: StoreProduct): LocalProduct {
   return { ...p, _modified: false, _imageAlt: p.imageAlt ?? "", _featured: false };
@@ -89,7 +89,7 @@ function toLocal(p: StoreProduct): LocalProduct {
 
 export default function ProductsPage() {
   const auth = getAuth();
-  const STORE_PLAN    = (auth?.plan ?? "basic") as keyof typeof PLAN_LIMITS;
+  const STORE_PLAN    = (auth?.plan ?? "free") as keyof typeof PLAN_LIMITS;
   const MAX_PRODUCTS  = PLAN_LIMITS[STORE_PLAN];
   const MAX_FEATURED  = FEATURED_LIMITS[STORE_PLAN];
   const MAX_CATEGORIES = CATEGORY_LIMITS[STORE_PLAN];
@@ -228,8 +228,10 @@ export default function ProductsPage() {
     try {
       setClearing(true);
       const storeId = getSellerStoreId();
+      const toRemove = products;
       await clearStoreProducts(storeId);
       invalidateProductsCache();
+      toRemove.forEach(p => removeProductFromShopping(p.slug, storeId));
       setProducts([]);
       setShowClearConfirm(false);
     } catch (e) {
@@ -289,7 +291,8 @@ export default function ProductsPage() {
 
   async function handleImageConfirmed(imageUrl: string, imageAlt?: string) {
     if (!imagePickerProduct) return;
-    const pid = imagePickerProduct.id;
+    const product = imagePickerProduct;
+    const pid = product.id;
     setImagePickerProduct(null);
     setSavingImageId(pid);
     try {
@@ -301,6 +304,15 @@ export default function ProductsPage() {
           ...(imageAlt ? { _imageAlt: imageAlt, _modified: true } : {}),
         } : p)
       );
+      syncProductToShopping({
+        name: product.name, slug: product.slug, category: product.category,
+        subCategory: product.subCategory, brand: product.brand,
+        description: product.description, imageUrl,
+        imageAlt: imageAlt ?? product._imageAlt ?? null,
+        price: product.price, promotionalPrice: product.promotionalPrice ?? null,
+        stock: product.stock, available: product.available,
+        storeId: getSellerStoreId(), storeName,
+      });
     } catch (e) {
       console.error(e);
       showError("Erro ao salvar imagem.");

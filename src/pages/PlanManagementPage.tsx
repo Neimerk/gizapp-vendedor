@@ -9,7 +9,7 @@ import { changePlan } from "../services/gizApi";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-type PlanId = "free" | "basic" | "premium" | "white";
+type PlanId = "free" | "start" | "pro" | "whitelabel";
 
 type PlanMeta = {
   id: PlanId;
@@ -27,16 +27,16 @@ type CompareRow = {
   category?: string;
   label: string;
   free: string | boolean;
-  basic: string | boolean;
-  premium: string | boolean;
-  white: string | boolean;
+  start: string | boolean;
+  pro: string | boolean;
+  whitelabel: string | boolean;
 };
 
 // ── Dados ─────────────────────────────────────────────────────────────────────
 
 const PLANS: PlanMeta[] = [
   {
-    id: "free",
+    id: "free" as PlanId,
     name: "Free",
     price: "R$0",
     period: "/mês",
@@ -54,7 +54,7 @@ const PLANS: PlanMeta[] = [
     ],
   },
   {
-    id: "basic",
+    id: "start" as PlanId,
     name: "Básico",
     price: "R$49",
     period: "/mês",
@@ -74,7 +74,7 @@ const PLANS: PlanMeta[] = [
     ],
   },
   {
-    id: "premium",
+    id: "pro" as PlanId,
     name: "Premium",
     price: "R$99",
     period: "/mês",
@@ -96,7 +96,7 @@ const PLANS: PlanMeta[] = [
     ],
   },
   {
-    id: "white",
+    id: "whitelabel" as PlanId,
     name: "White Label",
     price: "Consulte",
     period: "",
@@ -125,35 +125,41 @@ const PLANS: PlanMeta[] = [
 ];
 
 const COMPARE: CompareRow[] = [
-  { icon: Package, category: "Catálogo", label: "Produtos ativos", free: "50", basic: "300", premium: "1.000", white: "Ilimitado" },
-  { label: "Categorias de loja", free: "3", basic: "15", premium: "Ilimitadas", white: "Ilimitadas" },
-  { icon: Star, category: "Vitrine", label: "Destaques no Shopping", free: "3", basic: "15", premium: "30", white: "Ilimitados" },
-  { icon: Store, category: "Lojas", label: "Lojas por CPF/CNPJ", free: "1", basic: "Até 3", premium: "Até 10", white: "Ilimitadas" },
-  { icon: BarChart3, category: "Analytics", label: "Dashboard de KPIs", free: "Básico", basic: "Completo", premium: "Premium", white: "Customizado" },
-  { label: "Relatórios", free: false, basic: "Básico", premium: "Avançado + IA", white: "BI integrado" },
-  { icon: Zap, category: "Pedidos", label: "Pedidos por mês", free: "Ilimitados", basic: "Ilimitados", premium: "Ilimitados", white: "Ilimitados" },
-  { label: "WebSocket tempo real", free: true, basic: true, premium: true, white: true },
-  { label: "Gestão de entregas", free: true, basic: true, premium: true, white: true },
-  { icon: Code2, category: "API", label: "Acesso à API REST", free: false, basic: false, premium: true, white: true },
-  { label: "Webhooks", free: false, basic: false, premium: false, white: true },
-  { label: "Integração ERP/SAP", free: false, basic: false, premium: false, white: true },
-  { icon: Globe, category: "Marca", label: "Domínio personalizado", free: false, basic: false, premium: false, white: true },
-  { label: "Logo e marca próprios", free: false, basic: false, premium: false, white: true },
-  { icon: Shield, category: "SLA", label: "Uptime garantido (SLA)", free: false, basic: false, premium: false, white: "99,9%" },
-  { icon: Headphones, category: "Suporte", label: "Canal de suporte", free: "Comunidade", basic: "E-mail", premium: "Prioritário", white: "Dedicado 24/7" },
-  { icon: Users, category: "Conta", label: "Gerente de conta", free: false, basic: false, premium: false, white: true },
+  { icon: Package, category: "Catálogo", label: "Produtos ativos", free: "50", start: "300", pro: "1.000", whitelabel: "Ilimitado" },
+  { label: "Categorias de loja", free: "3", start: "15", pro: "Ilimitadas", whitelabel: "Ilimitadas" },
+  { icon: Star, category: "Vitrine", label: "Destaques no Shopping", free: "3", start: "15", pro: "30", whitelabel: "Ilimitados" },
+  { icon: Store, category: "Lojas", label: "Lojas por CPF/CNPJ", free: "1", start: "Até 3", pro: "Até 10", whitelabel: "Ilimitadas" },
+  { icon: BarChart3, category: "Analytics", label: "Dashboard de KPIs", free: "Básico", start: "Completo", pro: "Premium", whitelabel: "Customizado" },
+  { label: "Relatórios", free: false, start: "Básico", pro: "Avançado + IA", whitelabel: "BI integrado" },
+  { icon: Zap, category: "Pedidos", label: "Pedidos por mês", free: "Ilimitados", start: "Ilimitados", pro: "Ilimitados", whitelabel: "Ilimitados" },
+  { label: "WebSocket tempo real", free: true, start: true, pro: true, whitelabel: true },
+  { label: "Gestão de entregas", free: true, start: true, pro: true, whitelabel: true },
+  { icon: Code2, category: "API", label: "Acesso à API REST", free: false, start: false, pro: true, whitelabel: true },
+  { label: "Webhooks", free: false, start: false, pro: false, whitelabel: true },
+  { label: "Integração ERP/SAP", free: false, start: false, pro: false, whitelabel: true },
+  { icon: Globe, category: "Marca", label: "Domínio personalizado", free: false, start: false, pro: false, whitelabel: true },
+  { label: "Logo e marca próprios", free: false, start: false, pro: false, whitelabel: true },
+  { icon: Shield, category: "SLA", label: "Uptime garantido (SLA)", free: false, start: false, pro: false, whitelabel: "99,9%" },
+  { icon: Headphones, category: "Suporte", label: "Canal de suporte", free: "Comunidade", start: "E-mail", pro: "Prioritário", whitelabel: "Dedicado 24/7" },
+  { icon: Users, category: "Conta", label: "Gerente de conta", free: false, start: false, pro: false, whitelabel: true },
 ];
 
-const PLAN_ORDER: PlanId[] = ["free", "basic", "premium", "white"];
+const PLAN_ORDER: PlanId[] = ["free", "start", "pro", "whitelabel"];
 
 function rank(id: PlanId) { return PLAN_ORDER.indexOf(id); }
-function cellVal(row: CompareRow, id: PlanId): string | boolean { return row[id as keyof CompareRow] as string | boolean; }
+function cellVal(row: CompareRow, id: PlanId): string | boolean {
+  const key = id as keyof Pick<CompareRow, "free" | "start" | "pro" | "whitelabel">;
+  return row[key] as string | boolean;
+}
 
 // ── Componente ────────────────────────────────────────────────────────────────
 
 export default function PlanManagementPage() {
   const auth = getAuth();
-  const initialPlan = (auth?.plan ?? "free") as PlanId;
+  const rawPlan = auth?.plan ?? "free";
+  // Migrate legacy IDs that may still be in sessionStorage
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const initialPlan: PlanId = ((rawPlan as any) === "basic" ? "start" : (rawPlan as any) === "premium" ? "pro" : (rawPlan as any) === "white" ? "whitelabel" : rawPlan) as PlanId;
 
   const [localPlan, setLocalPlan] = useState<PlanId>(initialPlan);
   const [pending, setPending]     = useState<PlanMeta | null>(null);
@@ -164,21 +170,21 @@ export default function PlanManagementPage() {
   const [success, setSuccess]     = useState<string | null>(null);
 
   const currentMeta = PLANS.find(p => p.id === localPlan)!;
-  const isWhiteLabel = localPlan === "white";
+  const isWhiteLabel = localPlan === "whitelabel";
 
   function getAction(plan: PlanMeta): "current" | "upgrade" | "downgrade" | "contact" {
-    if (plan.id === "white") return "contact";
+    if (plan.id === "whitelabel") return "contact";
     if (plan.id === localPlan) return "current";
     return rank(plan.id) > rank(localPlan) ? "upgrade" : "downgrade";
   }
 
   async function handleChangePlan(target: PlanMeta) {
-    if (target.id === "white" || target.id === localPlan) return;
+    if (target.id === "whitelabel" || target.id === localPlan) return;
     setLoading(true);
     setError(null);
     try {
-      await changePlan(target.id as "free" | "basic" | "premium");
-      updateAuthPlan(target.id as "free" | "basic" | "premium");
+      await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
+      updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
       setLocalPlan(target.id);
       setSuccess(`Plano alterado para ${target.name} com sucesso!`);
       setTimeout(() => setSuccess(null), 4000);
@@ -335,7 +341,7 @@ export default function PlanManagementPage() {
           {PLANS.map((plan) => {
             const action  = getAction(plan);
             const isCur   = action === "current";
-            const isWhite = plan.id === "white";
+            const isWhite = plan.id === "whitelabel";
             const isUp    = action === "upgrade";
 
             return (
@@ -496,7 +502,7 @@ export default function PlanManagementPage() {
                   <th
                     key={p.id}
                     className="px-4 py-4 text-center text-xs font-black"
-                    style={{ color: p.id === localPlan ? "#16a34a" : p.id === "white" ? "#0f172a" : "#64748b" }}
+                    style={{ color: p.id === localPlan ? "#16a34a" : p.id === "whitelabel" ? "#0f172a" : "#64748b" }}
                   >
                     {p.name}
                     {p.id === localPlan && (
@@ -527,7 +533,7 @@ export default function PlanManagementPage() {
                     )}
                     <span className="font-medium text-[#0f172a]">{row.label}</span>
                   </td>
-                  {(["free", "basic", "premium", "white"] as PlanId[]).map((pid) => {
+                  {(["free", "start", "pro", "whitelabel"] as PlanId[]).map((pid) => {
                     const val = cellVal(row, pid);
                     return (
                       <td
@@ -551,7 +557,7 @@ export default function PlanManagementPage() {
       )}
 
       {/* ── Cancelar assinatura ─────────────────────────────────────────── */}
-      {localPlan !== "free" && localPlan !== "white" && (
+      {localPlan !== "free" && localPlan !== "whitelabel" && (
         <div className="rounded-3xl border border-orange-100 bg-orange-50/40 p-6">
           <div className="mb-4 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100">

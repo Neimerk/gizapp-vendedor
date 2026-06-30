@@ -11,6 +11,7 @@ import RegisterPage from "../pages/RegisterPage";
 import PlansPage from "../pages/PlansPage";
 import SalesReportPage from "../pages/SalesReportPage";
 import PlanManagementPage from "../pages/PlanManagementPage";
+import WalletPage from "../pages/WalletPage";
 
 import { getAuth } from "../services/auth";
 
@@ -47,6 +48,7 @@ export const router = createBrowserRouter([
       { path: "entregas", element: <CourierPage /> },
       { path: "relatorios", element: <SalesReportPage /> },
       { path: "plano", element: <PlanManagementPage /> },
+      { path: "carteira", element: <WalletPage /> },
     ],
   },
 ]);

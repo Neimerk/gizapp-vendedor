@@ -106,6 +106,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/entregas":   "Entregas",
   "/relatorios": "Relatórios",
   "/plano":      "Plano e Assinatura",
+  "/carteira":   "Carteira",
 };
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -194,7 +195,7 @@ export default function DashboardLayout() {
             <NavItem to="/pedidos" icon={ClipboardList} label="Pedidos" badge={pendingOrders > 0 ? pendingOrders : undefined} />
             <NavItem to="/relatorios" icon={BarChart3} label="Relatórios" />
             <NavItem to="/" icon={Users} label="Clientes" soon />
-            <NavItem to="/" icon={Wallet} label="Financeiro" soon />
+            <NavItem to="/carteira" icon={Wallet} label="Carteira" />
             <NavItem to="/" icon={Tag} label="Cupons" soon />
           </>
         )}

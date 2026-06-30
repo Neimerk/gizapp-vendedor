@@ -126,27 +126,28 @@ export default function CourierPage() {
   useEffect(() => {
     load();
 
+    const onOrderCreated = () => load(true);
+    const onOrderStatusUpdated = (updated: Order) => {
+      setMine((cur) => cur.map((o) => (o.id === updated.id ? updated : o)));
+      setAvailable((cur) => cur.filter((o) => o.id !== updated.id));
+    };
+    const onDeliveryTaken = (taken: Order) => {
+      setAvailable((cur) => cur.filter((o) => o.id !== taken.id));
+    };
+    const onDeliveryAccepted = (order: Order) => {
+      setMine((cur) =>
+        cur.some((o) => o.id === order.id) ? cur : [order, ...cur]
+      );
+      setAvailable((cur) => cur.filter((o) => o.id !== order.id));
+    };
+
     async function setupSignalR() {
       try {
         await startOrdersConnection();
-        ordersConnection.off("OrderCreated");
-        ordersConnection.on("OrderCreated", () => load(true));
-        ordersConnection.off("OrderStatusUpdated");
-        ordersConnection.on("OrderStatusUpdated", (updated: Order) => {
-          setMine((cur) => cur.map((o) => (o.id === updated.id ? updated : o)));
-          setAvailable((cur) => cur.filter((o) => o.id !== updated.id));
-        });
-        ordersConnection.off("DeliveryTaken");
-        ordersConnection.on("DeliveryTaken", (taken: Order) => {
-          setAvailable((cur) => cur.filter((o) => o.id !== taken.id));
-        });
-        ordersConnection.off("DeliveryAccepted");
-        ordersConnection.on("DeliveryAccepted", (order: Order) => {
-          setMine((cur) =>
-            cur.some((o) => o.id === order.id) ? cur : [order, ...cur]
-          );
-          setAvailable((cur) => cur.filter((o) => o.id !== order.id));
-        });
+        ordersConnection.on("OrderCreated", onOrderCreated);
+        ordersConnection.on("OrderStatusUpdated", onOrderStatusUpdated);
+        ordersConnection.on("DeliveryTaken", onDeliveryTaken);
+        ordersConnection.on("DeliveryAccepted", onDeliveryAccepted);
       } catch (e) {
         console.error("SignalR:", e);
       }
@@ -154,10 +155,10 @@ export default function CourierPage() {
     setupSignalR();
 
     return () => {
-      ordersConnection.off("OrderCreated");
-      ordersConnection.off("OrderStatusUpdated");
-      ordersConnection.off("DeliveryTaken");
-      ordersConnection.off("DeliveryAccepted");
+      ordersConnection.off("OrderCreated", onOrderCreated);
+      ordersConnection.off("OrderStatusUpdated", onOrderStatusUpdated);
+      ordersConnection.off("DeliveryTaken", onDeliveryTaken);
+      ordersConnection.off("DeliveryAccepted", onDeliveryAccepted);
     };
   }, []);
 

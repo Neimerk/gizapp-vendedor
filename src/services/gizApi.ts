@@ -1,7 +1,11 @@
-import { getAuth, getAuthToken, isTokenExpired, logout } from "./auth";
+import { getAuth, getAuthToken, isTokenExpired, logout, updateAuthSupabaseId, updateAuthPlan } from "./auth";
+import type { AuthUser } from "./auth";
+import { supabase } from "../lib/supabase";
 
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 export const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.dev";
 
@@ -53,6 +57,7 @@ export function clearAllCaches(): void {
 
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = getAuthToken();
+
   if (!token || isTokenExpired()) {
     logout();
     window.location.href = "/login";
@@ -159,7 +164,21 @@ export async function loginSeller(payload: LoginPayload) {
   if (!response.ok) {
     throw new Error("Email ou senha inválidos.");
   }
-  return response.json();
+  const data = await response.json();
+  // Dual auth: sign into Supabase so financial Edge Functions work; sync real plan from subscriptions
+  supabase.auth.signInWithPassword({ email: payload.email, password: payload.password })
+    .then(async ({ data: sbData }) => {
+      if (!sbData.user) return;
+      updateAuthSupabaseId(sbData.user.id);
+      const { data: sub } = await supabase
+        .from("subscriptions")
+        .select("plan")
+        .eq("vendor_id", sbData.user.id)
+        .maybeSingle() as { data: { plan: string } | null };
+      if (sub?.plan) updateAuthPlan(sub.plan as AuthUser["plan"]);
+    })
+    .catch(() => null);
+  return data;
 }
 
 export type RegisterStorePayload = {
@@ -398,16 +417,6 @@ export async function getFeaturedSlugs(storeId?: string): Promise<string[]> {
   }
 }
 
-export async function toggleFeaturedInShopping(slug: string, featured: boolean, storeId?: string): Promise<void> {
-  await authFetch(`${IMAGE_WORKER_URL}/sync/${encodeURIComponent(slug)}/featured`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ featured, storeId }),
-  }).catch((e) => {
-    console.warn("[toggle-featured] falha silenciosa:", e);
-  });
-}
-
 export async function getWorkerImages(search = ""): Promise<CatalogProduct[]> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
@@ -504,14 +513,21 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
   if (!response.ok) throw new Error("Erro ao salvar imagem do produto.");
 }
 
-export async function changePlan(plan: "free" | "basic" | "premium"): Promise<void> {
-  const response = await authFetch(`${GIZ_API_URL}/api/auth/me/plan`, {
-    method: "PATCH",
-    body: JSON.stringify({ plan }),
+export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Sessão Supabase não encontrada. Faça login novamente.");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ planId }),
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.message || `Erro ao alterar plano (${response.status})`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || `Erro ao alterar plano (${res.status})`);
   }
 }
 

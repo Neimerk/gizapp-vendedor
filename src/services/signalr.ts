@@ -24,9 +24,9 @@ class WsHub {
     this.listeners.get(event)!.add(callback as EventCallback);
   }
 
-  off(event: string, callback?: EventCallback): void {
+  off<T = unknown>(event: string, callback?: EventCallback<T>): void {
     if (callback) {
-      this.listeners.get(event)?.delete(callback);
+      this.listeners.get(event)?.delete(callback as EventCallback);
     } else {
       this.listeners.delete(event);
     }
