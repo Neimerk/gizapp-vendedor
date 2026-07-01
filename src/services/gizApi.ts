@@ -503,7 +503,7 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
   if (!response.ok) throw new Error("Erro ao salvar imagem do produto.");
 }
 
-export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<void> {
+export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<{ paymentLink: string | null }> {
   const res = await authFetch(`${GIZ_API_URL}/api/auth/plan`, {
     method: "PATCH",
     body: JSON.stringify({ plan: planId }),
@@ -512,6 +512,7 @@ export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"
     const body = await res.json().catch(() => null);
     throw new Error(body?.message || `Erro ao alterar plano (${res.status})`);
   }
+  return res.json();
 }
 
 export async function deleteAccount(): Promise<void> {

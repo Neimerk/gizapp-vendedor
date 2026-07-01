@@ -3,6 +3,7 @@ import {
   Check, X, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
   Package, Star, Store, Loader2, AlertTriangle, ExternalLink,
   Crown, Zap, Headphones, Globe, Shield, Code2, Users, BarChart3,
+  CreditCard, Clock,
 } from "lucide-react";
 import { getAuth, updateAuthPlan } from "../services/auth";
 import { changePlan } from "../services/gizApi";
@@ -168,6 +169,8 @@ export default function PlanManagementPage() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState<string | null>(null);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+  const [paymentPlan, setPaymentPlan] = useState<PlanMeta | null>(null);
 
   const currentMeta = PLANS.find(p => p.id === localPlan)!;
   const isWhiteLabel = localPlan === "whitelabel";
@@ -183,11 +186,18 @@ export default function PlanManagementPage() {
     setLoading(true);
     setError(null);
     try {
-      await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
-      updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
-      setLocalPlan(target.id);
-      setSuccess(`Plano alterado para ${target.name} com sucesso!`);
-      setTimeout(() => setSuccess(null), 4000);
+      const { paymentLink: link } = await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
+      if (link) {
+        // Upgrade: aguarda pagamento via Asaas
+        setPaymentLink(link);
+        setPaymentPlan(target);
+      } else {
+        // Downgrade para free: imediato
+        updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
+        setLocalPlan(target.id);
+        setSuccess(`Plano alterado para ${target.name} com sucesso!`);
+        setTimeout(() => setSuccess(null), 4000);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao alterar plano.");
     } finally {
@@ -685,6 +695,57 @@ export default function PlanManagementPage() {
                   : "Confirmar downgrade"
                 }
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: pagamento Asaas ──────────────────────────────────────── */}
+      {paymentLink && paymentPlan && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(11,17,32,0.65)", backdropFilter: "blur(5px)" }}
+        >
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f0fdf4]">
+              <CreditCard size={22} className="text-[#16a34a]" />
+            </div>
+
+            <h2 className="mt-3 text-xl font-black text-[#0f172a]">
+              Finalizar pagamento
+            </h2>
+            <p className="mt-2 text-sm text-[#64748b]">
+              Uma assinatura recorrente de <strong>{paymentPlan.price}/mês</strong> foi criada para o plano{" "}
+              <strong>{paymentPlan.name}</strong>. Realize o pagamento para ativar o plano.
+            </p>
+
+            <div className="mt-4 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+              <div className="flex items-start gap-3">
+                <Clock size={15} className="mt-0.5 shrink-0 text-[#94a3b8]" />
+                <p className="text-xs text-[#64748b]">
+                  Após o pagamento confirmado, seu plano será ativado automaticamente.
+                  Pode levar alguns minutos. Faça logout e login novamente para ver o novo plano.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={() => { setPaymentLink(null); setPaymentPlan(null); }}
+                className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
+              >
+                Fechar
+              </button>
+              <a
+                href={paymentLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => { setPaymentLink(null); setPaymentPlan(null); }}
+                className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white transition-colors"
+                style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.35)" }}
+              >
+                <ExternalLink size={14} /> Ir para pagamento
+              </a>
             </div>
           </div>
         </div>
