@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, TrendingUp, Clock, ArrowDownLeft, ArrowUpRight,
-  Loader2, AlertTriangle, X, Check, RefreshCw,
+  Loader2, AlertTriangle, X, Check, RefreshCw, BarChart3,
 } from "lucide-react";
 import {
   getVendorWallet, getVendorSubscription,
@@ -188,6 +188,46 @@ export default function WalletPage() {
           </p>
         </div>
       </div>
+
+      {/* Comissões por mês */}
+      {txs.length > 0 && (() => {
+        type MonthEntry = { month: string; earned: number; withdrawn: number; count: number };
+        const byMonth = new Map<string, MonthEntry>();
+        for (const tx of txs) {
+          const d = new Date(tx.createdAt);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+          if (!byMonth.has(key)) byMonth.set(key, { month: label, earned: 0, withdrawn: 0, count: 0 });
+          const e = byMonth.get(key)!;
+          if (tx.direction === "in") { e.earned += tx.amount; e.count++; }
+          else e.withdrawn += tx.amount;
+        }
+        const months = [...byMonth.values()].slice(0, 6);
+        return (
+          <div className="rounded-3xl border border-[#e2e8f0] bg-white">
+            <div className="flex items-center gap-2 border-b border-[#f1f5f9] px-6 py-4">
+              <BarChart3 size={16} className="text-[#94a3b8]" />
+              <h2 className="text-sm font-black text-[#0f172a]">Resumo por mês</h2>
+            </div>
+            <ul className="divide-y divide-[#f1f5f9]">
+              {months.map((m) => (
+                <li key={m.month} className="flex items-center gap-4 px-6 py-3.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-sm font-semibold capitalize text-[#0f172a]">{m.month}</p>
+                    <p className="text-xs text-[#94a3b8]">{m.count} entrada{m.count !== 1 ? "s" : ""}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-black text-[#16a34a]">+{brl(m.earned)}</p>
+                    {m.withdrawn > 0 && (
+                      <p className="text-xs text-[#ef4444]">−{brl(m.withdrawn)}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Extrato */}
       <div className="rounded-3xl border border-[#e2e8f0] bg-white">

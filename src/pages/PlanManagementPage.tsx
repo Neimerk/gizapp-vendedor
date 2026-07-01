@@ -3,10 +3,10 @@ import {
   Check, X, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
   Package, Star, Store, Loader2, AlertTriangle, ExternalLink,
   Crown, Zap, Headphones, Globe, Shield, Code2, Users, BarChart3,
-  CreditCard, Clock, RefreshCw,
+  CreditCard, Clock, RefreshCw, Receipt,
 } from "lucide-react";
 import { getAuth, updateAuthPlan } from "../services/auth";
-import { changePlan, getPlanStatus } from "../services/gizApi";
+import { changePlan, getPlanStatus, getInvoices, type Invoice } from "../services/gizApi";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -180,6 +180,8 @@ export default function PlanManagementPage() {
   const [pollingPlan, setPollingPlan] = useState<PlanMeta | null>(null);
   const [pollingStatus, setPollingStatus] = useState<"waiting" | "timeout">("waiting");
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
 
   useEffect(() => {
     if (!pollingPlan) return;
@@ -209,6 +211,11 @@ export default function PlanManagementPage() {
     }, 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [pollingPlan]);
+
+  useEffect(() => {
+    setInvoicesLoading(true);
+    getInvoices().then(setInvoices).catch(() => setInvoices([])).finally(() => setInvoicesLoading(false));
+  }, []);
 
   function stopPolling() {
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -690,6 +697,73 @@ export default function PlanManagementPage() {
           </div>
         </div>
       )}
+
+      {/* ── Histórico de faturas ────────────────────────────────────────── */}
+      {localPlan !== "free" || invoices.length > 0 ? (
+        <div className="rounded-3xl border border-[#e2e8f0] bg-white">
+          <div className="flex items-center justify-between border-b border-[#f1f5f9] px-6 py-4">
+            <div className="flex items-center gap-2">
+              <Receipt size={16} className="text-[#94a3b8]" />
+              <h2 className="text-sm font-black text-[#0f172a]">Faturas</h2>
+            </div>
+            {invoicesLoading && <Loader2 size={14} className="animate-spin text-[#94a3b8]" />}
+          </div>
+
+          {invoices.length === 0 && !invoicesLoading ? (
+            <div className="py-10 text-center">
+              <p className="text-sm text-[#94a3b8]">Nenhuma fatura encontrada.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-[#f1f5f9]">
+              {invoices.map((inv) => {
+                const statusMap: Record<string, { label: string; color: string; bg: string }> = {
+                  CONFIRMED:    { label: "Pago", color: "#16a34a", bg: "#f0fdf4" },
+                  RECEIVED:     { label: "Pago", color: "#16a34a", bg: "#f0fdf4" },
+                  PENDING:      { label: "Pendente", color: "#d97706", bg: "#fffbeb" },
+                  OVERDUE:      { label: "Vencida", color: "#dc2626", bg: "#fef2f2" },
+                  REFUNDED:     { label: "Reembolsado", color: "#2563eb", bg: "#eff6ff" },
+                  CANCELLED:    { label: "Cancelada", color: "#94a3b8", bg: "#f8fafc" },
+                  CHARGEBACK_REQUESTED: { label: "Contestada", color: "#7c3aed", bg: "#faf5ff" },
+                };
+                const s = statusMap[inv.status] ?? { label: inv.status, color: "#64748b", bg: "#f8fafc" };
+                const brlFmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+                const fmtDate = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("pt-BR");
+                return (
+                  <li key={inv.id} className="flex items-center gap-4 px-6 py-3.5">
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-sm font-semibold text-[#0f172a]">
+                        {inv.description ?? "Assinatura BrasUX"}
+                      </p>
+                      <p className="text-xs text-[#94a3b8]">
+                        Venc. {fmtDate(inv.dueDate)}
+                        {inv.paymentDate ? ` · Pago em ${fmtDate(inv.paymentDate)}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-black"
+                      style={{ color: s.color, background: s.bg }}
+                    >
+                      {s.label}
+                    </span>
+                    <p className="shrink-0 text-sm font-black text-[#0f172a]">{brlFmt(inv.value)}</p>
+                    {inv.invoiceUrl && (
+                      <a
+                        href={inv.invoiceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 text-[#94a3b8] hover:text-[#16a34a]"
+                        title="Ver fatura"
+                      >
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      ) : null}
 
       {/* ── Modal: alterar plano ─────────────────────────────────────────── */}
       {pending && (

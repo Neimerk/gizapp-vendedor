@@ -529,6 +529,24 @@ export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"
   return res.json();
 }
 
+export type Invoice = {
+  id: string;
+  value: number;
+  netValue: number;
+  status: string;
+  billingType: string;
+  dueDate: string;
+  paymentDate: string | null;
+  invoiceUrl: string | null;
+  description: string | null;
+};
+
+export async function getInvoices(): Promise<Invoice[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/invoices`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function deleteAccount(): Promise<void> {
   const response = await authFetch(`${GIZ_API_URL}/api/auth/me`, { method: "DELETE" });
   if (!response.ok) {
