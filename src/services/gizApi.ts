@@ -217,6 +217,36 @@ export async function updateStore(id: string, data: UpdateStorePayload): Promise
 }
 
 /* =========================
+   STORE HOURS
+========================= */
+
+export type StoreHour = {
+  day:       number;
+  label:     string;
+  isOpen:    boolean;
+  openTime:  string;
+  closeTime: string;
+};
+
+export async function getStoreHours(storeId: string): Promise<StoreHour[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/stores/${storeId}/hours`);
+  if (!res.ok) throw new Error("Erro ao buscar horários.");
+  return res.json();
+}
+
+export async function updateStoreHours(storeId: string, hours: StoreHour[]): Promise<StoreHour[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/stores/${storeId}/hours`, {
+    method: "PUT",
+    body: JSON.stringify({ hours }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message ?? "Erro ao salvar horários.");
+  }
+  return res.json();
+}
+
+/* =========================
    STORE PRODUCTS API
 ========================= */
 
@@ -286,6 +316,9 @@ export type Order = {
   deliveryFee: number;
   subtotal: number;
   total: number;
+  serviceFee: number;
+  paymentStatus: string;
+  asaasChargeId: string | null;
   status: number;
   courierId?: string | null;
   createdAt: string;
@@ -303,6 +336,91 @@ export async function getOrders(): Promise<Order[]> {
   if (!response.ok) throw new Error("Erro ao buscar pedidos");
   return response.json();
 }
+
+/* =========================
+   CUPONS
+========================= */
+
+export type Coupon = {
+  id: string;
+  storeId: string;
+  code: string;
+  description: string | null;
+  discountType: "percent" | "fixed";
+  discountValue: number;
+  minOrderValue: number;
+  maxUses: number | null;
+  usesCount: number;
+  validFrom: string | null;
+  validUntil: string | null;
+  active: boolean;
+  createdAt: string;
+};
+
+export async function getCoupons(): Promise<Coupon[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/coupons`);
+  if (!res.ok) throw new Error("Erro ao buscar cupons.");
+  return res.json();
+}
+
+export async function createCoupon(data: {
+  code: string; description?: string;
+  discountType: "percent" | "fixed"; discountValue: number;
+  minOrderValue?: number; maxUses?: number;
+  validFrom?: string; validUntil?: string;
+}): Promise<Coupon> {
+  const res = await authFetch(`${GIZ_API_URL}/api/coupons`, {
+    method: "POST", body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message ?? "Erro ao criar cupom.");
+  }
+  return res.json();
+}
+
+export async function toggleCoupon(id: string, active: boolean): Promise<Coupon> {
+  const res = await authFetch(`${GIZ_API_URL}/api/coupons/${id}`, {
+    method: "PATCH", body: JSON.stringify({ active }),
+  });
+  if (!res.ok) throw new Error("Erro ao atualizar cupom.");
+  return res.json();
+}
+
+export async function deleteCoupon(id: string): Promise<void> {
+  const res = await authFetch(`${GIZ_API_URL}/api/coupons/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Erro ao excluir cupom.");
+}
+
+/* =========================
+   CLIENTES
+========================= */
+
+export type Customer = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string | null;
+  orderCount: number;
+  totalSpent: number;
+  lastOrderAt: string;
+};
+
+export async function getCustomers(): Promise<Customer[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/customers`);
+  if (!res.ok) throw new Error("Erro ao buscar clientes.");
+  return res.json();
+}
+
+export async function getCustomerOrders(customerId: string): Promise<unknown[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/customers/${customerId}/orders`);
+  if (!res.ok) throw new Error("Erro ao buscar pedidos do cliente.");
+  return res.json();
+}
+
+/* =========================
+   DELIVERIES
+========================= */
 
 export async function getAvailableDeliveries(): Promise<Order[]> {
   const response = await authFetch(`${GIZ_API_URL}/api/orders/courier/available`, { cache: "no-store" });
@@ -332,6 +450,17 @@ export async function updateOrderStatus(id: string, status: number) {
   });
   if (!response.ok) throw new Error("Erro ao atualizar pedido");
   return response.json();
+}
+
+export async function confirmCashPayment(id: string): Promise<Order> {
+  const res = await authFetch(`${GIZ_API_URL}/api/orders/${id}/confirm-cash`, {
+    method: "PATCH",
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message ?? "Erro ao confirmar pagamento.");
+  }
+  return res.json();
 }
 
 /* =========================
@@ -504,9 +633,15 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
 }
 
 export async function getPlanStatus(): Promise<{ plan: string }> {
-  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/status`);
-  if (!res.ok) throw new Error("Erro ao verificar plano");
-  return res.json();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado.");
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("plan")
+    .eq("vendor_id", user.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return { plan: data?.plan ?? "free" };
 }
 
 export type ChangePlanResult = {
@@ -515,18 +650,35 @@ export type ChangePlanResult = {
   pixPayload: string | null;
   pixQrCodeImage: string | null;
   dueDate: string | null;
+  activated: boolean;
 };
 
 export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<ChangePlanResult> {
-  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/plan`, {
-    method: "PATCH",
-    body: JSON.stringify({ plan: planId }),
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.message || `Erro ao alterar plano (${res.status})`);
-  }
-  return res.json();
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    plan: string;
+    activated: boolean;
+    firstPayment?: {
+      pixCode: string;
+      pixQrCode: string;
+      dueDate: string;
+      expirationDate: string;
+    } | null;
+    error?: string;
+  }>("create-subscription", { body: { planId } });
+
+  if (error) throw new Error(error.message ?? "Erro ao alterar plano");
+  if (!data?.ok) throw new Error(data?.error ?? "Erro ao alterar plano");
+
+  const fp = data.firstPayment;
+  return {
+    plan:           data.plan,
+    activated:      data.activated,
+    pixPayload:     fp?.pixCode     ?? null,
+    pixQrCodeImage: fp?.pixQrCode   ?? null,
+    dueDate:        fp?.dueDate     ?? null,
+    paymentLink:    null,
+  };
 }
 
 export type Invoice = {
@@ -542,9 +694,26 @@ export type Invoice = {
 };
 
 export async function getInvoices(): Promise<Invoice[]> {
-  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/invoices`);
-  if (!res.ok) return [];
-  return res.json();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  // Busca eventos de pagamento de assinatura como histórico de faturas
+  const { data } = await supabase
+    .from("subscription_events")
+    .select("id, to_plan, created_at, metadata")
+    .eq("vendor_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(24);
+  return (data ?? []).map(e => ({
+    id:          e.id,
+    value:       Number((e.metadata as Record<string, unknown>)?.amount ?? 0),
+    netValue:    Number((e.metadata as Record<string, unknown>)?.amount ?? 0),
+    status:      "CONFIRMED",
+    billingType: "PIX",
+    dueDate:     (e.created_at as string).slice(0, 10),
+    paymentDate: (e.created_at as string).slice(0, 10),
+    invoiceUrl:  null,
+    description: `Plano ${e.to_plan}`,
+  }));
 }
 
 export async function deleteAccount(): Promise<void> {
@@ -553,4 +722,100 @@ export async function deleteAccount(): Promise<void> {
     const body = await response.json().catch(() => null);
     throw new Error(body?.message || `Erro ao excluir conta (${response.status})`);
   }
+}
+
+/* =========================
+   ASAAS SUBACCOUNT
+========================= */
+
+export type AsaasAccountInfo = {
+  accountId: string | null;
+  walletId: string | null;
+  cpfCnpj: string | null;
+  accountName: string | null;
+  kycStatus: string | null;
+  splitEnabled: boolean;
+};
+
+/* =========================
+   ADMIN — SAQUES
+========================= */
+
+export type Withdrawal = {
+  id:               string;
+  ownerType:        string;
+  ownerName:        string;
+  ownerEmail:       string;
+  ownerRole:        string;
+  amountGross:      number;
+  withdrawalFee:    number;
+  amountNet:        number;
+  pixKey:           string;
+  pixKeyType:       string;
+  status:           string;
+  notes:            string | null;
+  gatewayReference: string | null;
+  processedAt:      string | null;
+  createdAt:        string;
+};
+
+export async function getAdminWithdrawals(status = "pending"): Promise<Withdrawal[]> {
+  const res = await authFetch(`${GIZ_API_URL}/api/admin/withdrawals?status=${status}`);
+  if (!res.ok) throw new Error("Erro ao buscar saques.");
+  return res.json();
+}
+
+export async function updateWithdrawal(
+  id: string,
+  status: "paid" | "failed" | "cancelled",
+  gatewayReference?: string,
+  notes?: string,
+): Promise<void> {
+  const res = await authFetch(`${GIZ_API_URL}/api/admin/withdrawals/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, gatewayReference, notes }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message ?? `Erro ao atualizar saque (${res.status})`);
+  }
+}
+
+export type AsaasAccountStatusResponse = {
+  connected: boolean;
+  account: AsaasAccountInfo | null;
+};
+
+export async function getAsaasAccountStatus(): Promise<AsaasAccountStatusResponse> {
+  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/asaas-account`);
+  if (!res.ok) return { connected: false, account: null };
+  return res.json();
+}
+
+export async function connectAsaasAccount(params: {
+  cpfCnpj: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  addressNumber: string;
+  complement?: string;
+  province: string;
+  postalCode: string;
+}): Promise<{ connected: boolean; accountId: string; walletId: string }> {
+  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/asaas-account`, {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.message || `Erro ao criar conta de recebimento (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function reconcileOrders(): Promise<{ reconciled: number }> {
+  const res = await authFetch(`${GIZ_API_URL}/api/orders/reconcile`, { method: "POST" });
+  if (!res.ok) return { reconciled: 0 };
+  return res.json();
 }

@@ -171,7 +171,7 @@ export default function PlanManagementPage() {
   const [success, setSuccess]     = useState<string | null>(null);
   const [payment, setPayment] = useState<{
     plan: PlanMeta;
-    invoiceUrl: string;
+    invoiceUrl: string | null;
     pixPayload: string | null;
     pixQrCodeImage: string | null;
     dueDate: string | null;
@@ -253,17 +253,24 @@ export default function PlanManagementPage() {
     try {
       const action = getAction(target);
       const result = await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
-      if (action === "upgrade") {
-        if (!result.paymentLink) throw new Error("Não foi possível gerar o link de pagamento. Tente novamente.");
+      if (result.activated) {
+        // Plano ativado imediatamente (downgrade ou free)
+        updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
+        setLocalPlan(target.id);
+        setSuccess(`Plano ${target.name} ativado com sucesso!`);
+        setTimeout(() => setSuccess(null), 4000);
+      } else if (action === "upgrade") {
+        // Plano pago: exibe PIX para pagamento
         setPayment({
-          plan: target,
-          invoiceUrl: result.paymentLink,
-          pixPayload: result.pixPayload,
+          plan:           target,
+          invoiceUrl:     result.paymentLink,
+          pixPayload:     result.pixPayload,
           pixQrCodeImage: result.pixQrCodeImage,
-          dueDate: result.dueDate,
+          dueDate:        result.dueDate,
         });
+        setPollingPlan(target);
       } else {
-        // Downgrade para free: imediato (plano só muda no DB após webhook confirmar; aqui atualiza sessão local)
+        // Downgrade sem ativação imediata: aguarda webhook
         updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
         setLocalPlan(target.id);
         setSuccess(`Plano alterado para ${target.name} com sucesso!`);
@@ -953,21 +960,23 @@ export default function PlanManagementPage() {
 
             {/* Botões */}
             <div className="px-6 pb-6 flex flex-col gap-3">
-              <a
-                href={payment.invoiceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  const plan = payment.plan;
-                  setPayment(null);
-                  setPollingPlan(plan);
-                }}
-                className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white transition-colors"
-                style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}
-              >
-                <ExternalLink size={14} />
-                {payment.pixQrCodeImage ? "Abrir checkout completo (cartão, boleto…)" : "Ir para pagamento"}
-              </a>
+              {payment.invoiceUrl && (
+                <a
+                  href={payment.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => {
+                    const plan = payment.plan;
+                    setPayment(null);
+                    setPollingPlan(plan);
+                  }}
+                  className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white transition-colors"
+                  style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}
+                >
+                  <ExternalLink size={14} />
+                  {payment.pixQrCodeImage ? "Abrir checkout completo (cartão, boleto…)" : "Ir para pagamento"}
+                </a>
+              )}
               <button
                 onClick={() => { setPayment(null); }}
                 className="rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
