@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, TrendingUp, Clock, ArrowDownLeft, ArrowUpRight,
-  Loader2, AlertTriangle, X, Check, RefreshCw, BarChart3,
+  Loader2, AlertTriangle, X, Check, RefreshCw, BarChart3, Search,
 } from "lucide-react";
 import {
   getVendorWallet, getVendorSubscription,
   requestVendorWithdrawal,
   type VendorWallet, type VendorSubscription,
 } from "../services/wallet";
+import { reconcileOrders } from "../services/gizApi";
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,9 @@ export default function WalletPage() {
   const [sub, setSub]             = useState<VendorSubscription | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal]       = useState(false);
+  const [reconciling, setReconciling]   = useState(false);
+  const [reconcileMsg, setReconcileMsg] = useState<string | null>(null);
 
   // Modal state
   const [amount, setAmount]         = useState("");
@@ -135,13 +138,46 @@ export default function WalletPage() {
           <p className="text-xs font-black uppercase tracking-widest text-[#16a34a]">Financeiro</p>
           <h1 className="mt-0.5 text-3xl font-black text-[#0f172a]">Carteira</h1>
         </div>
-        <button
-          onClick={() => void load()}
-          className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-xs font-black text-[#64748b] hover:border-[#cbd5e1]"
-        >
-          <RefreshCw size={13} /> Atualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              setReconciling(true);
+              setReconcileMsg(null);
+              try {
+                const { reconciled } = await reconcileOrders();
+                setReconcileMsg(reconciled > 0
+                  ? `${reconciled} pagamento${reconciled > 1 ? "s" : ""} reconciliado${reconciled > 1 ? "s" : ""}.`
+                  : "Nenhum pagamento pendente encontrado.");
+                if (reconciled > 0) void load();
+              } catch {
+                setReconcileMsg("Erro ao reconciliar pagamentos.");
+              } finally {
+                setReconciling(false);
+                setTimeout(() => setReconcileMsg(null), 5000);
+              }
+            }}
+            disabled={reconciling}
+            className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-xs font-black text-[#64748b] hover:border-[#cbd5e1] disabled:opacity-50"
+            title="Reconciliar pagamentos online que estão presos em 'pendente'"
+          >
+            {reconciling ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            Reconciliar
+          </button>
+          <button
+            onClick={() => void load()}
+            className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-white px-3 py-2 text-xs font-black text-[#64748b] hover:border-[#cbd5e1]"
+          >
+            <RefreshCw size={13} /> Atualizar
+          </button>
+        </div>
       </div>
+
+      {reconcileMsg && (
+        <div className="flex items-center gap-2 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-2.5">
+          <Check size={13} className="shrink-0 text-[#16a34a]" />
+          <p className="text-xs font-semibold text-[#0f172a]">{reconcileMsg}</p>
+        </div>
+      )}
 
       {/* Cards de saldo */}
       <div className="grid gap-4 sm:grid-cols-3">

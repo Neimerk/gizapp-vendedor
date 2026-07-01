@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, ReceiptText, Search, X, AlertCircle, Phone } from "lucide-react";
+import { RefreshCw, ReceiptText, Search, X, AlertCircle, Phone, Banknote, QrCode, Clock, CheckCircle2 } from "lucide-react";
+import { confirmCashPayment } from "../services/gizApi";
 
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
@@ -48,6 +49,41 @@ function formatMoney(v: number) {
   return `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
 }
 
+type PaymentBadgeProps = { paymentMethod: string; paymentStatus: string };
+function PaymentBadge({ paymentMethod, paymentStatus }: PaymentBadgeProps) {
+  const isCash = /dinheiro|cash/i.test(paymentMethod);
+
+  if (isCash) {
+    return (
+      <span className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-black"
+        style={{ background: "#f1f5f9", color: "#64748b" }}>
+        <Banknote size={10} /> Na entrega
+      </span>
+    );
+  }
+
+  const map: Record<string, { bg: string; color: string; border: string; label: string }> = {
+    paid:              { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0", label: "✓ Pago" },
+    pending:           { bg: "#fffbeb", color: "#b45309", border: "#fde68a", label: "Aguardando pagamento" },
+    refund_requested:  { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa", label: "Estorno solicitado" },
+    refunded:          { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe", label: "Estornado" },
+    chargeback:        { bg: "#fef2f2", color: "#dc2626", border: "#fecaca", label: "Chargeback" },
+    overdue:           { bg: "#fef2f2", color: "#dc2626", border: "#fecaca", label: "Vencida" },
+    cancelled:         { bg: "#f8fafc", color: "#94a3b8", border: "#e2e8f0", label: "Cancelada" },
+  };
+
+  const style = map[paymentStatus] ?? { bg: "#f8fafc", color: "#94a3b8", border: "#e2e8f0", label: paymentStatus };
+  const isPending = paymentStatus === "pending";
+
+  return (
+    <span className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-[10px] font-black"
+      style={{ background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>
+      {isPending ? <Clock size={10} /> : <QrCode size={10} />}
+      {style.label}
+    </span>
+  );
+}
+
 function isToday(d: string) {
   const n = new Date(), t = new Date(d);
   return (
@@ -70,17 +106,33 @@ const PAGE_SIZE = 10;
 export default function OrdersPage() {
   const { orders, loading, refresh, updateOrderStatus } = useOrdersStore();
 
-  const [refreshing,  setRefreshing]  = useState(false);
-  const [updatingId,  setUpdatingId]  = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [dateFilter,  setDateFilter]  = useState<DateFilter>("all");
-  const [search,      setSearch]      = useState("");
-  const [errorMsg,    setErrorMsg]    = useState<string | null>(null);
+  const [refreshing,    setRefreshing]    = useState(false);
+  const [updatingId,    setUpdatingId]    = useState("");
+  const [confirmingId,  setConfirmingId]  = useState("");
+  const [statusFilter,  setStatusFilter]  = useState<StatusFilter>("all");
+  const [dateFilter,    setDateFilter]    = useState<DateFilter>("all");
+  const [search,        setSearch]        = useState("");
+  const [errorMsg,      setErrorMsg]      = useState<string | null>(null);
 
   async function handleRefresh() {
     setRefreshing(true);
     await refresh();
     setRefreshing(false);
+  }
+
+  async function handleConfirmCash(orderId: string) {
+    const scrollY = window.scrollY;
+    try {
+      setConfirmingId(orderId);
+      await confirmCashPayment(orderId);
+      await refresh();
+      requestAnimationFrame(() => window.scrollTo({ top: scrollY, behavior: "instant" }));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erro ao confirmar pagamento.";
+      setErrorMsg(msg);
+    } finally {
+      setConfirmingId("");
+    }
   }
 
   async function handleStatus(orderId: string, status: number) {
@@ -265,16 +317,19 @@ export default function OrdersPage() {
                         {new Date(order.createdAt).toLocaleString("pt-BR")} · {order.paymentMethod}
                       </p>
                     </div>
-                    <span
-                      className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-black"
-                      style={{
-                        background: ORDER_BADGE_BG[order.status],
-                        color: ORDER_BADGE_COLOR[order.status],
-                        border: `1px solid ${ORDER_BADGE_BORDER[order.status]}`,
-                      }}
-                    >
-                      {STATUS_LABEL[order.status]}
-                    </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <span
+                        className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-black"
+                        style={{
+                          background: ORDER_BADGE_BG[order.status],
+                          color: ORDER_BADGE_COLOR[order.status],
+                          border: `1px solid ${ORDER_BADGE_BORDER[order.status]}`,
+                        }}
+                      >
+                        {STATUS_LABEL[order.status]}
+                      </span>
+                      <PaymentBadge paymentMethod={order.paymentMethod} paymentStatus={order.paymentStatus} />
+                    </div>
                   </div>
 
                   <div className="px-5 py-4">
@@ -335,6 +390,20 @@ export default function OrdersPage() {
                             >
                               Cancelar
                             </button>
+                            {/* Botão de confirmação de dinheiro: pedido em dinheiro, entregue, ainda não confirmado */}
+                            {/dinheiro|cash/i.test(order.paymentMethod) &&
+                              order.status === 4 &&
+                              order.paymentStatus !== "paid" && (
+                              <button
+                                onClick={() => handleConfirmCash(order.id)}
+                                disabled={confirmingId === order.id}
+                                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black text-white transition-all active:scale-[0.97] disabled:opacity-50"
+                                style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.35)" }}
+                              >
+                                <CheckCircle2 size={13} />
+                                {confirmingId === order.id ? "…" : "Recebi o dinheiro"}
+                              </button>
+                            )}
                             {nextAction && (
                               <button
                                 onClick={() => handleStatus(order.id, nextAction.value)}

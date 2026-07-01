@@ -97,6 +97,66 @@ export async function getVendorSubscription(): Promise<VendorSubscription | null
   };
 }
 
+export async function getCourierWallet(): Promise<VendorWallet> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado.");
+
+  const { data: walletId, error: walletErr } = await (
+    supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<RpcStrResult>
+  )("get_or_create_wallet", { p_owner_id: user.id, p_wallet_type: "courier" });
+
+  if (walletErr || !walletId) throw new Error(walletErr?.message ?? "Carteira não encontrada.");
+
+  const { data: balance } = await (
+    supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<BalanceResult>
+  )("get_wallet_balance", { p_wallet_id: walletId });
+
+  type TxRow = { id: string; type: string; amount: number; direction: string; description: string; order_id: string | null; status: string; created_at: string };
+  const { data: txs } = await supabase
+    .from("wallet_transactions")
+    .select("id, type, amount, direction, description, order_id, status, created_at")
+    .eq("wallet_id", walletId)
+    .order("created_at", { ascending: false })
+    .limit(30) as unknown as { data: TxRow[] | null };
+
+  return {
+    id:          walletId,
+    balance:     Number(balance?.available ?? 0),
+    totalEarned: Number(balance?.total ?? 0),
+    held:        Number(balance?.held ?? 0),
+    transactions: (txs ?? []).map(t => ({
+      id: t.id, type: t.type, amount: Number(t.amount),
+      direction: t.direction as "in" | "out", description: t.description ?? "",
+      orderId: t.order_id, status: t.status, createdAt: t.created_at,
+    })),
+  };
+}
+
+export async function requestCourierWithdrawal(amount: number, pixKey: string, pixKeyType: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Não autenticado.");
+
+  const { data: walletId, error: walletErr } = await (
+    supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<RpcStrResult>
+  )("get_or_create_wallet", { p_owner_id: user.id, p_wallet_type: "courier" });
+
+  if (walletErr || !walletId) throw new Error("Carteira não encontrada.");
+
+  type VoidResult = { error: { message: string } | null };
+  const { error } = await (
+    supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<VoidResult>
+  )("request_withdrawal", {
+    p_wallet_id:    walletId,
+    p_owner_id:     user.id,
+    p_owner_type:   "courier",
+    p_amount:       amount,
+    p_pix_key:      pixKey,
+    p_pix_key_type: pixKeyType,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
 export async function requestVendorWithdrawal(amount: number, pixKey: string, pixKeyType: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado.");

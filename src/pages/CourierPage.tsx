@@ -16,6 +16,11 @@ import {
   ChevronDown,
   ChevronUp,
   Locate,
+  Wallet,
+  ArrowDownRight,
+  ArrowUpRight,
+  X,
+  Loader2,
 } from "lucide-react";
 
 import {
@@ -26,6 +31,7 @@ import {
   getProductImageUrl,
   type Order,
 } from "../services/gizApi";
+import { getCourierWallet, requestCourierWithdrawal, type VendorWallet } from "../services/wallet";
 import { ordersConnection, startOrdersConnection, sendCourierLocation } from "../services/signalr";
 import { getAuth } from "../services/auth";
 import { useGeolocation } from "../hooks/useGeolocation";
@@ -44,7 +50,7 @@ const STATUS_LABEL: Record<number, string> = {
   5: "Cancelado",
 };
 
-type Tab = "available" | "active" | "history";
+type Tab = "available" | "active" | "history" | "wallet";
 
 function formatBRL(v: number) {
   return `R$ ${Number(v).toFixed(2).replace(".", ",")}`;
@@ -105,6 +111,18 @@ export default function CourierPage() {
   const [delivering, setDelivering] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Carteira do entregador
+  const [wallet, setWallet] = useState<VendorWallet | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawPixKey, setWithdrawPixKey] = useState("");
+  const [withdrawPixType, setWithdrawPixType] = useState("PIX_KEY");
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawOk, setWithdrawOk] = useState(false);
+
   async function load(silent = false) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -120,6 +138,39 @@ export default function CourierPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  }
+
+  async function loadWallet() {
+    setWalletLoading(true);
+    setWalletError(null);
+    try {
+      setWallet(await getCourierWallet());
+    } catch (e) {
+      setWalletError(e instanceof Error ? e.message : "Erro ao carregar carteira.");
+    } finally {
+      setWalletLoading(false);
+    }
+  }
+
+  async function handleWithdraw() {
+    const amount = parseFloat(withdrawAmount.replace(",", "."));
+    if (!amount || amount <= 0) { setWithdrawError("Informe um valor válido."); return; }
+    if (!withdrawPixKey.trim()) { setWithdrawError("Informe a chave PIX."); return; }
+    setWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      await requestCourierWithdrawal(amount, withdrawPixKey.trim(), withdrawPixType);
+      setWithdrawOk(true);
+      setShowWithdraw(false);
+      setWithdrawAmount("");
+      setWithdrawPixKey("");
+      await loadWallet();
+      setTimeout(() => setWithdrawOk(false), 4000);
+    } catch (e) {
+      setWithdrawError(e instanceof Error ? e.message : "Erro ao solicitar saque.");
+    } finally {
+      setWithdrawing(false);
     }
   }
 
@@ -227,10 +278,11 @@ export default function CourierPage() {
     pageItems: histItems,
   } = usePagination(history, PAGE_SIZE);
 
-  const tabs: { key: Tab; label: string; count: number }[] = [
+  const tabs: { key: Tab; label: string; count?: number; icon?: React.ReactNode }[] = [
     { key: "available", label: "Disponíveis", count: available.length },
-    { key: "active", label: "Em andamento", count: active.length },
-    { key: "history", label: "Histórico", count: history.length },
+    { key: "active",    label: "Em andamento", count: active.length },
+    { key: "history",   label: "Histórico",    count: history.length },
+    { key: "wallet",    label: "Carteira",      icon: <Wallet size={12} /> },
   ];
 
   return (
@@ -302,15 +354,16 @@ export default function CourierPage() {
         {tabs.map((t) => (
           <button
             key={t.key}
-            onClick={() => setTab(t.key)}
+            onClick={() => { setTab(t.key); if (t.key === "wallet" && !wallet) void loadWallet(); }}
             className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-black transition-colors ${
               tab === t.key
                 ? "bg-[#16a34a] text-white shadow-sm shadow-[#16a34a]/30"
                 : "border border-[#e2e8f0] bg-white text-[#64748b] hover:bg-[#f8fafc]"
             }`}
           >
+            {t.icon && t.icon}
             {t.label}
-            {t.count > 0 && (
+            {(t.count ?? 0) > 0 && (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
                   tab === t.key
@@ -419,6 +472,155 @@ export default function CourierPage() {
                     onPageChange={setHistPage}
                   />
                 </>
+              )}
+            </div>
+          )}
+
+          {/* CARTEIRA */}
+          {tab === "wallet" && (
+            <div className="space-y-4">
+              {walletLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 size={28} className="animate-spin text-[#16a34a]" />
+                </div>
+              ) : walletError ? (
+                <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+                  {walletError}
+                </div>
+              ) : wallet ? (
+                <>
+                  {/* Saldo cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-3xl border border-[#e8eaf0] bg-white p-5 shadow-sm">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#94a3b8]">Saldo disponível</p>
+                      <p className="mt-1 text-2xl font-black text-[#0f172a]">{formatBRL(wallet.balance)}</p>
+                    </div>
+                    <div className="rounded-3xl border border-[#e8eaf0] bg-white p-5 shadow-sm">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-[#94a3b8]">Total ganho</p>
+                      <p className="mt-1 text-2xl font-black text-[#16a34a]">{formatBRL(wallet.totalEarned)}</p>
+                    </div>
+                  </div>
+
+                  {/* Feedback de saque */}
+                  {withdrawOk && (
+                    <div className="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm font-semibold text-green-700">
+                      Saque solicitado! O valor será transferido via PIX em até 1 dia útil.
+                    </div>
+                  )}
+
+                  {/* Botão saque */}
+                  <button
+                    onClick={() => { setShowWithdraw(true); setWithdrawError(null); }}
+                    disabled={wallet.balance <= 0}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white disabled:opacity-40"
+                    style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}
+                  >
+                    <Wallet size={15} /> Sacar via PIX
+                  </button>
+
+                  {/* Extrato */}
+                  {wallet.transactions.length > 0 && (
+                    <div className="rounded-3xl border border-[#e8eaf0] bg-white shadow-sm overflow-hidden">
+                      <div className="border-b border-[#f1f5f9] px-5 py-3">
+                        <p className="text-xs font-black uppercase tracking-widest text-[#94a3b8]">Extrato recente</p>
+                      </div>
+                      <div className="divide-y divide-[#f8fafc]">
+                        {wallet.transactions.map((tx) => (
+                          <div key={tx.id} className="flex items-center gap-3 px-5 py-3">
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tx.direction === "in" ? "bg-green-50" : "bg-red-50"}`}>
+                              {tx.direction === "in"
+                                ? <ArrowDownRight size={14} className="text-green-600" />
+                                : <ArrowUpRight size={14} className="text-red-500" />
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="truncate text-xs font-black text-[#0f172a]">{tx.description}</p>
+                              <p className="text-[10px] text-[#94a3b8]">
+                                {new Date(tx.createdAt).toLocaleDateString("pt-BR")}
+                              </p>
+                            </div>
+                            <p className={`text-sm font-black shrink-0 ${tx.direction === "in" ? "text-green-600" : "text-red-500"}`}>
+                              {tx.direction === "in" ? "+" : "−"}{formatBRL(tx.amount)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {wallet.transactions.length === 0 && (
+                    <EmptyState
+                      icon={<Wallet size={36} className="text-[#16a34a]" />}
+                      title="Nenhuma transação ainda"
+                      subtitle="Seus ganhos de entrega aparecerão aqui após a confirmação."
+                    />
+                  )}
+                </>
+              ) : null}
+
+              {/* Modal de saque */}
+              {showWithdraw && (
+                <div
+                  className="fixed inset-0 z-50 flex items-end justify-center md:items-center"
+                  style={{ background: "rgba(11,17,32,0.55)", backdropFilter: "blur(4px)" }}
+                  onClick={(e) => { if (e.target === e.currentTarget) setShowWithdraw(false); }}
+                >
+                  <div className="w-full max-w-sm rounded-t-3xl md:rounded-3xl bg-white p-6 shadow-2xl">
+                    <div className="mb-5 flex items-center justify-between">
+                      <p className="text-base font-black text-[#0f172a]">Sacar via PIX</p>
+                      <button onClick={() => setShowWithdraw(false)} className="text-[#94a3b8] hover:text-[#64748b]">
+                        <X size={18} />
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-black text-[#64748b]">Valor (R$)</label>
+                        <input
+                          type="number" min="1" step="0.01"
+                          placeholder="0,00"
+                          value={withdrawAmount}
+                          onChange={(e) => setWithdrawAmount(e.target.value)}
+                          className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-black text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                        />
+                        <p className="mt-1 text-[10px] text-[#94a3b8]">Disponível: {formatBRL(wallet?.balance ?? 0)}</p>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-black text-[#64748b]">Tipo de chave PIX</label>
+                        <select
+                          value={withdrawPixType}
+                          onChange={(e) => setWithdrawPixType(e.target.value)}
+                          className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-black text-[#0f172a] outline-none"
+                        >
+                          <option value="random">Chave aleatória</option>
+                          <option value="cpf">CPF</option>
+                          <option value="cnpj">CNPJ</option>
+                          <option value="phone">Telefone</option>
+                          <option value="email">E-mail</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-black text-[#64748b]">Chave PIX</label>
+                        <input
+                          type="text" placeholder="Digite sua chave PIX"
+                          value={withdrawPixKey}
+                          onChange={(e) => setWithdrawPixKey(e.target.value)}
+                          className="w-full rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm font-black text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                        />
+                      </div>
+                      {withdrawError && (
+                        <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{withdrawError}</p>
+                      )}
+                      <button
+                        onClick={() => void handleWithdraw()}
+                        disabled={withdrawing}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white disabled:opacity-60"
+                        style={{ background: "linear-gradient(135deg, #16a34a, #15803d)" }}
+                      >
+                        {withdrawing ? <><Loader2 size={14} className="animate-spin" /> Solicitando…</> : "Confirmar saque"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}

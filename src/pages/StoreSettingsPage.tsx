@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle2, ImageIcon, Loader2, MapPin, Store as StoreIcon, Upload, X, Trash2, AlertTriangle } from "lucide-react";
+import { AlertCircle, CheckCircle2, ImageIcon, Loader2, MapPin, Store as StoreIcon, Upload, X, Trash2, AlertTriangle, Banknote, Clock } from "lucide-react";
 
 import {
   getStoreById,
   updateStore,
   uploadProductImage,
   deleteAccount,
+  getAsaasAccountStatus,
+  connectAsaasAccount,
+  getStoreHours,
+  updateStoreHours,
   type Store,
   type UpdateStorePayload,
+  type AsaasAccountInfo,
+  type StoreHour,
 } from "../services/gizApi";
 import { getAuth, logout } from "../services/auth";
 import { clearAllCaches } from "../services/gizApi";
@@ -44,25 +50,103 @@ export default function StoreSettingsPage() {
   // selected product-type slugs (persisted in store.category as "slug1,slug2,…")
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
 
+  // Store hours state
+  const [hours, setHours] = useState<StoreHour[]>([]);
+  const [hoursSaving, setHoursSaving] = useState(false);
+  const [hoursSaved, setHoursSaved] = useState(false);
+  const [hoursError, setHoursError] = useState<string | null>(null);
+
+  // Asaas subaccount state (only for CNPJ vendors)
+  const auth = getAuth();
+  const isCnpj = auth?.documentType === "cnpj";
+  const [asaasAccount, setAsaasAccount] = useState<AsaasAccountInfo | null>(null);
+  const [asaasLoading, setAsaasLoading] = useState(false);
+  const [asaasConnecting, setAsaasConnecting] = useState(false);
+  const [asaasError, setAsaasError] = useState<string | null>(null);
+  const [asaasSuccess, setAsaasSuccess] = useState(false);
+  const [showAsaasForm, setShowAsaasForm] = useState(false);
+  const [asaasForm, setAsaasForm] = useState({
+    cpfCnpj: "", name: "", email: "", phone: "",
+    address: "", addressNumber: "", complement: "", province: "", postalCode: "",
+  });
+
   useEffect(() => {
     async function loadStore() {
       try {
         setLoading(true);
-        const storeId = getAuth()?.storeId;
+        const storeId = auth?.storeId;
         if (!storeId) throw new Error("Loja não encontrada para este usuário.");
         const data = await getStoreById(storeId);
         setStore(data);
         if (data.category) {
           setSelectedTypes(data.category.split(",").map((s) => s.trim()).filter(Boolean));
         }
+        // Pre-fill Asaas form with store data
+        setAsaasForm(f => ({
+          ...f,
+          name:          data.name ?? "",
+          email:         data.email ?? "",
+          phone:         data.phone ?? data.whatsapp ?? "",
+          address:       data.address ?? "",
+          addressNumber: data.number ?? "",
+          complement:    data.complement ?? "",
+          province:      data.neighborhood ?? "",
+          postalCode:    data.zipCode ?? "",
+        }));
       } catch (error) {
         console.error(error);
       } finally {
         setLoading(false);
       }
     }
-    loadStore();
+
+    async function loadHours() {
+      const storeId = auth?.storeId;
+      if (!storeId) return;
+      try {
+        const h = await getStoreHours(storeId);
+        setHours(h);
+      } catch { /* usa padrão vazio */ }
+    }
+
+    async function loadAsaasAccount() {
+      if (!isCnpj) return;
+      setAsaasLoading(true);
+      try {
+        const status = await getAsaasAccountStatus();
+        if (status.connected && status.account) setAsaasAccount(status.account);
+      } catch { /* ignore */ } finally {
+        setAsaasLoading(false);
+      }
+    }
+
+    void loadStore();
+    void loadAsaasAccount();
+    void loadHours();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleSaveHours() {
+    const storeId = auth?.storeId;
+    if (!storeId || hours.length !== 7) return;
+    setHoursSaving(true);
+    setHoursError(null);
+    setHoursSaved(false);
+    try {
+      const updated = await updateStoreHours(storeId, hours);
+      setHours(updated);
+      setHoursSaved(true);
+      setTimeout(() => setHoursSaved(false), 3000);
+    } catch (e) {
+      setHoursError(e instanceof Error ? e.message : "Erro ao salvar horários.");
+    } finally {
+      setHoursSaving(false);
+    }
+  }
+
+  function setHour(day: number, field: keyof StoreHour, value: string | boolean) {
+    setHours(prev => prev.map(h => h.day === day ? { ...h, [field]: value } : h));
+  }
 
   function toggleType(slug: string) {
     setSelectedTypes((prev) =>
@@ -161,6 +245,30 @@ export default function StoreSettingsPage() {
       setSaveError(error instanceof Error ? error.message : "Erro ao atualizar loja.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAsaasConnect() {
+    setAsaasError(null);
+    const cnpj = asaasForm.cpfCnpj.replace(/\D/g, "");
+    if (cnpj.length !== 14) { setAsaasError("Informe um CNPJ válido (14 dígitos)."); return; }
+    if (!asaasForm.name.trim()) { setAsaasError("Nome da empresa é obrigatório."); return; }
+    if (!asaasForm.email.trim()) { setAsaasError("E-mail é obrigatório."); return; }
+    if (!asaasForm.phone.trim()) { setAsaasError("Telefone é obrigatório."); return; }
+    if (!asaasForm.postalCode.replace(/\D/g, "")) { setAsaasError("CEP é obrigatório."); return; }
+
+    setAsaasConnecting(true);
+    try {
+      await connectAsaasAccount({ ...asaasForm, cpfCnpj: asaasForm.cpfCnpj });
+      setAsaasSuccess(true);
+      setShowAsaasForm(false);
+      const status = await getAsaasAccountStatus();
+      if (status.connected && status.account) setAsaasAccount(status.account);
+      setTimeout(() => setAsaasSuccess(false), 4000);
+    } catch (err) {
+      setAsaasError(err instanceof Error ? err.message : "Erro ao conectar conta.");
+    } finally {
+      setAsaasConnecting(false);
     }
   }
 
@@ -670,6 +778,235 @@ export default function StoreSettingsPage() {
           })}
         </div>
       </div>
+
+      {/* Conta de Recebimento — somente para CNPJ */}
+      {isCnpj && (
+        <div className="rounded-3xl bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7c3aed]/10">
+              <Banknote size={16} className="text-[#7c3aed]" />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-[#0f172a]">Conta de Recebimento</h2>
+              <p className="text-xs text-[#64748b]">Habilita split automático de pagamentos pelo Asaas</p>
+            </div>
+            {asaasLoading && <Loader2 size={14} className="ml-auto animate-spin text-[#94a3b8]" />}
+          </div>
+
+          {asaasAccount ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-[#bbf7d0] bg-[#f0fdf4] px-4 py-3">
+                <CheckCircle2 size={16} className="shrink-0 text-[#16a34a]" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-[#0f172a]">Conta conectada</p>
+                  <p className="truncate text-xs text-[#16a34a]">{asaasAccount.accountName ?? "—"}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-[#16a34a]/10 px-2.5 py-1 text-[10px] font-black text-[#16a34a]">
+                  KYC: {asaasAccount.kycStatus ?? "—"}
+                </span>
+              </div>
+              <p className="text-xs text-[#94a3b8]">
+                Split ativado — pagamentos do marketplace serão repassados automaticamente para sua conta.
+              </p>
+            </div>
+          ) : !showAsaasForm ? (
+            <div className="space-y-3">
+              {asaasSuccess && (
+                <div className="flex items-center gap-2 rounded-xl border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2">
+                  <CheckCircle2 size={13} className="shrink-0 text-[#16a34a]" />
+                  <p className="text-xs font-semibold text-[#16a34a]">Conta conectada com sucesso!</p>
+                </div>
+              )}
+              <p className="text-sm text-[#64748b]">
+                Empresas (CNPJ) podem registrar uma subconta Asaas para receber automaticamente o repasse de vendas via split de pagamento.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAsaasForm(true)}
+                className="flex items-center gap-2 rounded-xl bg-[#7c3aed] px-4 py-2.5 text-xs font-black text-white hover:bg-[#6d28d9]"
+              >
+                <Banknote size={14} /> Conectar conta de recebimento
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">CNPJ</label>
+                  <input
+                    value={asaasForm.cpfCnpj}
+                    onChange={e => setAsaasForm(f => ({ ...f, cpfCnpj: e.target.value }))}
+                    className={inputCls}
+                    placeholder="00.000.000/0000-00"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Nome da empresa</label>
+                  <input
+                    value={asaasForm.name}
+                    onChange={e => setAsaasForm(f => ({ ...f, name: e.target.value }))}
+                    className={inputCls}
+                    placeholder="Razão social ou nome fantasia"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">E-mail</label>
+                  <input
+                    type="email"
+                    value={asaasForm.email}
+                    onChange={e => setAsaasForm(f => ({ ...f, email: e.target.value }))}
+                    className={inputCls}
+                    placeholder="empresa@exemplo.com"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Telefone</label>
+                  <input
+                    value={asaasForm.phone}
+                    onChange={e => setAsaasForm(f => ({ ...f, phone: e.target.value }))}
+                    className={inputCls}
+                    placeholder="(00) 0000-0000"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">CEP</label>
+                  <input
+                    value={asaasForm.postalCode}
+                    onChange={e => setAsaasForm(f => ({ ...f, postalCode: e.target.value }))}
+                    className={inputCls}
+                    placeholder="00000-000"
+                    inputMode="numeric"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Endereço</label>
+                  <input
+                    value={asaasForm.address}
+                    onChange={e => setAsaasForm(f => ({ ...f, address: e.target.value }))}
+                    className={inputCls}
+                    placeholder="Rua / Avenida"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Número</label>
+                  <input
+                    value={asaasForm.addressNumber}
+                    onChange={e => setAsaasForm(f => ({ ...f, addressNumber: e.target.value }))}
+                    className={inputCls}
+                    placeholder="123"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-[#94a3b8]">Bairro</label>
+                  <input
+                    value={asaasForm.province}
+                    onChange={e => setAsaasForm(f => ({ ...f, province: e.target.value }))}
+                    className={inputCls}
+                    placeholder="Nome do bairro"
+                  />
+                </div>
+              </div>
+
+              {asaasError && (
+                <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+                  <AlertCircle size={13} className="shrink-0 text-red-500" />
+                  <p className="text-xs font-semibold text-red-700">{asaasError}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowAsaasForm(false); setAsaasError(null); }}
+                  className="flex-1 rounded-2xl border border-[#e2e8f0] py-2.5 text-xs font-black text-[#64748b] hover:bg-[#f8fafc]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleAsaasConnect()}
+                  disabled={asaasConnecting}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#7c3aed] py-2.5 text-xs font-black text-white hover:bg-[#6d28d9] disabled:opacity-60"
+                >
+                  {asaasConnecting ? <><Loader2 size={13} className="animate-spin" /> Conectando…</> : "Conectar conta"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Horários de Funcionamento ─────────────────────────────────────── */}
+      {hours.length === 7 && (
+        <div className="rounded-3xl border border-[#e2e8f0] bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-[#f0fdf4]">
+              <Clock size={16} className="text-[#16a34a]" />
+            </div>
+            <div>
+              <h2 className="text-base font-black text-[#0f172a]">Horários de Funcionamento</h2>
+              <p className="text-xs text-[#94a3b8]">O status "aberto/fechado" é atualizado automaticamente</p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {hours.map(h => (
+              <div key={h.day} className={`flex items-center gap-3 rounded-2xl px-4 py-3 transition-colors ${h.isOpen ? "bg-[#f0fdf4]" : "bg-[#f8fafc]"}`}>
+                {/* Toggle aberto/fechado */}
+                <button
+                  type="button"
+                  onClick={() => setHour(h.day, "isOpen", !h.isOpen)}
+                  className={`relative h-6 w-11 rounded-full transition-colors ${h.isOpen ? "bg-[#16a34a]" : "bg-[#cbd5e1]"}`}
+                >
+                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${h.isOpen ? "translate-x-5" : "translate-x-0.5"}`} />
+                </button>
+
+                {/* Nome do dia */}
+                <span className={`w-16 text-sm font-black ${h.isOpen ? "text-[#0f172a]" : "text-[#94a3b8]"}`}>
+                  {h.label.slice(0, 3)}
+                </span>
+
+                {h.isOpen ? (
+                  <div className="flex flex-1 items-center gap-2">
+                    <input
+                      type="time"
+                      value={h.openTime}
+                      onChange={e => setHour(h.day, "openTime", e.target.value)}
+                      className="rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                    />
+                    <span className="text-xs font-bold text-[#94a3b8]">até</span>
+                    <input
+                      type="time"
+                      value={h.closeTime}
+                      onChange={e => setHour(h.day, "closeTime", e.target.value)}
+                      className="rounded-xl border border-[#e2e8f0] bg-white px-3 py-1.5 text-sm font-semibold text-[#0f172a] outline-none focus:ring-2 focus:ring-[#16a34a]/30"
+                    />
+                  </div>
+                ) : (
+                  <span className="flex-1 text-xs font-semibold text-[#cbd5e1]">Fechado</span>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {hoursError && (
+            <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
+              <AlertCircle size={13} className="shrink-0 text-red-500" />
+              <p className="text-xs font-semibold text-red-700">{hoursError}</p>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSaveHours}
+            disabled={hoursSaving}
+            className={`mt-4 w-full rounded-2xl py-3 text-sm font-black text-white transition-all disabled:opacity-60 ${hoursSaved ? "bg-[#16a34a]" : "bg-gradient-to-r from-[#16a34a] to-[#15803d]"}`}
+          >
+            {hoursSaving ? "Salvando…" : hoursSaved ? "✓ Horários salvos!" : "Salvar horários"}
+          </button>
+        </div>
+      )}
 
       {/* Save */}
       <button

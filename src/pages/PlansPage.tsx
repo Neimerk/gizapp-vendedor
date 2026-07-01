@@ -106,7 +106,7 @@ const PLANS: Plan[] = [
     badge: "Enterprise",
     highlight: false,
     cta: "Falar com equipe",
-    ctaHref: "https://wa.me/5500000000000?text=Quero+saber+mais+sobre+o+White+Label",
+    ctaHref: "https://wa.me/5548984470474?text=Quero+saber+mais+sobre+o+White+Label",
     ctaStyle: "dark",
     color: "#0f172a",
     features: [

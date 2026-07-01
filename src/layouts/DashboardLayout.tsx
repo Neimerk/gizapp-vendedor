@@ -5,10 +5,11 @@ import {
   LayoutDashboard, Package, ClipboardList, Store, Truck,
   LogOut, ExternalLink, Menu, X, ChevronRight,
   Users, Wallet, Tag, MapPin, UserCheck, Palette, Calendar,
-  Settings, BarChart3, Bell, Search, CreditCard,
+  Settings, BarChart3, Bell, Search, CreditCard, AlertTriangle, ShieldCheck,
 } from "lucide-react";
 import { getAuth, logout } from "../services/auth";
 import { clearAllCaches } from "../services/gizApi";
+import { getVendorSubscription } from "../services/wallet";
 import { useOrdersStore } from "../stores/ordersStore";
 import OrderToast from "../components/ui/OrderToast";
 
@@ -122,12 +123,23 @@ export default function DashboardLayout() {
     toastVisible, toastMessage, dismissToast, wsStatus, orders,
   } = useOrdersStore();
 
+  const [subStatus, setSubStatus] = useState<string | null>(null);
+
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
     fetchOrders();
     initSignalR();
+
+    if (auth?.role === "Seller" || auth?.role === "Admin") {
+      getVendorSubscription().then(sub => {
+        if (sub && (sub.status === "overdue" || sub.status === "suspended" || sub.status === "cancelled")) {
+          setSubStatus(sub.status);
+        }
+      }).catch(() => null);
+    }
+
     return teardownSignalR;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -194,9 +206,9 @@ export default function DashboardLayout() {
             <NavItem to="/produtos" icon={Package} label="Produtos" />
             <NavItem to="/pedidos" icon={ClipboardList} label="Pedidos" badge={pendingOrders > 0 ? pendingOrders : undefined} />
             <NavItem to="/relatorios" icon={BarChart3} label="Relatórios" />
-            <NavItem to="/" icon={Users} label="Clientes" soon />
+            <NavItem to="/clientes" icon={Users} label="Clientes" />
             <NavItem to="/carteira" icon={Wallet} label="Carteira" />
-            <NavItem to="/" icon={Tag} label="Cupons" soon />
+            <NavItem to="/cupons" icon={Tag} label="Cupons" />
           </>
         )}
 
@@ -212,6 +224,13 @@ export default function DashboardLayout() {
         <NavItem to="/" icon={Palette} label="Aparência" soon />
         <NavItem to="/" icon={Calendar} label="Horários" soon />
         <NavItem to="/" icon={Settings} label="Configurações" soon />
+
+        {auth?.role === "Admin" && (
+          <>
+            <NavSection label="Admin" />
+            <NavItem to="/admin/saques" icon={ShieldCheck} label="Gestão de Saques" />
+          </>
+        )}
 
         <NavSection label="Ecossistema" />
         <a
@@ -397,6 +416,41 @@ export default function DashboardLayout() {
             </div>
           </div>
         </header>
+
+        {subStatus && (
+          <div
+            className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold"
+            style={{
+              background: subStatus === "overdue" ? "#fef3c7" : "#fee2e2",
+              borderBottom: `1px solid ${subStatus === "overdue" ? "#fde68a" : "#fecaca"}`,
+              color: subStatus === "overdue" ? "#92400e" : "#991b1b",
+            }}
+          >
+            <AlertTriangle size={15} className="shrink-0" />
+            <span className="flex-1">
+              {subStatus === "overdue"
+                ? "Sua assinatura está vencida. Regularize para evitar suspensão da loja."
+                : "Sua assinatura foi cancelada. Faça o upgrade para reativar os recursos."}
+            </span>
+            <button
+              onClick={() => navigate("/plano")}
+              className="shrink-0 rounded-lg px-3 py-1 text-xs font-black transition-colors"
+              style={{
+                background: subStatus === "overdue" ? "#f59e0b" : "#ef4444",
+                color: "#fff",
+              }}
+            >
+              Regularizar
+            </button>
+            <button
+              onClick={() => setSubStatus(null)}
+              className="shrink-0 rounded-lg p-1 opacity-60 hover:opacity-100"
+              aria-label="Fechar aviso"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
 
         <main className="flex-1 overflow-auto p-4 md:p-8">
           <Outlet />

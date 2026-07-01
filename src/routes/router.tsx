@@ -12,6 +12,9 @@ import PlansPage from "../pages/PlansPage";
 import SalesReportPage from "../pages/SalesReportPage";
 import PlanManagementPage from "../pages/PlanManagementPage";
 import WalletPage from "../pages/WalletPage";
+import AdminWithdrawalsPage from "../pages/AdminWithdrawalsPage";
+import CouponsPage from "../pages/CouponsPage";
+import CustomersPage from "../pages/CustomersPage";
 
 import { getAuth } from "../services/auth";
 
@@ -49,6 +52,9 @@ export const router = createBrowserRouter([
       { path: "relatorios", element: <SalesReportPage /> },
       { path: "plano", element: <PlanManagementPage /> },
       { path: "carteira", element: <WalletPage /> },
+      { path: "admin/saques", element: <AdminWithdrawalsPage /> },
+      { path: "cupons", element: <CouponsPage /> },
+      { path: "clientes", element: <CustomersPage /> },
     ],
   },
 ]);
