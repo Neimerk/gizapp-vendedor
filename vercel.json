@@ -7,7 +7,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://qbvcjuadogufsieehwth.supabase.co https://brasux-images.brasux-account.workers.dev; connect-src 'self' https://brasux-api.brasux-account.workers.dev wss://brasux-api.brasux-account.workers.dev https://brasux-images.brasux-account.workers.dev https://viacep.com.br; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://cbyufprmiuwvhsxsxttn.supabase.co https://brasux-images.brasux-account.workers.dev; connect-src 'self' https://brasux-api.brasux-account.workers.dev wss://brasux-api.brasux-account.workers.dev https://brasux-images.brasux-account.workers.dev https://viacep.com.br https://cbyufprmiuwvhsxsxttn.supabase.co wss://cbyufprmiuwvhsxsxttn.supabase.co https://api.asaas.com https://api-sandbox.asaas.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';"
         },
         {
           "key": "Strict-Transport-Security",
