@@ -504,7 +504,7 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
 }
 
 export async function getPlanStatus(): Promise<{ plan: string }> {
-  const res = await authFetch(`${GIZ_API_URL}/api/auth/plan-status`);
+  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/status`);
   if (!res.ok) throw new Error("Erro ao verificar plano");
   return res.json();
 }
@@ -518,7 +518,7 @@ export type ChangePlanResult = {
 };
 
 export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<ChangePlanResult> {
-  const res = await authFetch(`${GIZ_API_URL}/api/auth/plan`, {
+  const res = await authFetch(`${GIZ_API_URL}/api/subscriptions/plan`, {
     method: "PATCH",
     body: JSON.stringify({ plan: planId }),
   });
