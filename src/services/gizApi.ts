@@ -1,11 +1,8 @@
-import { getAuth, getAuthToken, isTokenExpired, logout, updateAuthSupabaseId, updateAuthPlan } from "./auth";
-import type { AuthUser } from "./auth";
+import { getAuth, getAuthToken, isTokenExpired, logout, updateAuthSupabaseId } from "./auth";
 import { supabase } from "../lib/supabase";
 
 export const GIZ_API_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5003";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 
 export const IMAGE_WORKER_URL = "https://brasux-images.brasux-account.workers.dev";
 
@@ -165,17 +162,10 @@ export async function loginSeller(payload: LoginPayload) {
     throw new Error("Email ou senha inválidos.");
   }
   const data = await response.json();
-  // Dual auth: sign into Supabase so financial Edge Functions work; sync real plan from subscriptions
+  // Sign into Supabase para wallet/subscription (funciona para usuários criados após fix de 2026-07-01)
   supabase.auth.signInWithPassword({ email: payload.email, password: payload.password })
-    .then(async ({ data: sbData }) => {
-      if (!sbData.user) return;
-      updateAuthSupabaseId(sbData.user.id);
-      const { data: sub } = await supabase
-        .from("subscriptions")
-        .select("plan")
-        .eq("vendor_id", sbData.user.id)
-        .maybeSingle() as { data: { plan: string } | null };
-      if (sub?.plan) updateAuthPlan(sub.plan as AuthUser["plan"]);
+    .then(({ data: sbData }) => {
+      if (sbData.user) updateAuthSupabaseId(sbData.user.id);
     })
     .catch(() => null);
   return data;
@@ -514,20 +504,13 @@ export async function updateStoreProductImage(id: string, imageUrl: string): Pro
 }
 
 export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<void> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Sessão Supabase não encontrada. Faça login novamente.");
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-subscription`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${session.access_token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ planId }),
+  const res = await authFetch(`${GIZ_API_URL}/api/auth/plan`, {
+    method: "PATCH",
+    body: JSON.stringify({ plan: planId }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.error || `Erro ao alterar plano (${res.status})`);
+    throw new Error(body?.message || `Erro ao alterar plano (${res.status})`);
   }
 }
 
