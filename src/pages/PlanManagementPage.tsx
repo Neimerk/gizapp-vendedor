@@ -1,12 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Check, X, ArrowUp, ArrowDown, ChevronDown, ChevronUp,
   Package, Star, Store, Loader2, AlertTriangle, ExternalLink,
   Crown, Zap, Headphones, Globe, Shield, Code2, Users, BarChart3,
-  CreditCard, Clock,
+  CreditCard, Clock, RefreshCw,
 } from "lucide-react";
 import { getAuth, updateAuthPlan } from "../services/auth";
-import { changePlan } from "../services/gizApi";
+import { changePlan, getPlanStatus } from "../services/gizApi";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
@@ -169,8 +169,66 @@ export default function PlanManagementPage() {
   const [loading, setLoading]     = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState<string | null>(null);
-  const [paymentLink, setPaymentLink] = useState<string | null>(null);
-  const [paymentPlan, setPaymentPlan] = useState<PlanMeta | null>(null);
+  const [payment, setPayment] = useState<{
+    plan: PlanMeta;
+    invoiceUrl: string;
+    pixPayload: string | null;
+    pixQrCodeImage: string | null;
+    dueDate: string | null;
+  } | null>(null);
+  const [pixCopied, setPixCopied] = useState(false);
+  const [pollingPlan, setPollingPlan] = useState<PlanMeta | null>(null);
+  const [pollingStatus, setPollingStatus] = useState<"waiting" | "timeout">("waiting");
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!pollingPlan) return;
+    setPollingStatus("waiting");
+    let attempts = 0;
+    const MAX = 60; // 5 min a cada 5s
+    pollingRef.current = setInterval(async () => {
+      attempts++;
+      try {
+        const { plan } = await getPlanStatus();
+        if (plan === pollingPlan.id) {
+          clearInterval(pollingRef.current!);
+          pollingRef.current = null;
+          updateAuthPlan(plan as Parameters<typeof updateAuthPlan>[0]);
+          setLocalPlan(plan as PlanId);
+          setPollingPlan(null);
+          setSuccess(`Plano ${pollingPlan.name} ativado com sucesso!`);
+          setTimeout(() => setSuccess(null), 6000);
+          return;
+        }
+      } catch { /* ignora falha de rede e tenta de novo */ }
+      if (attempts >= MAX) {
+        clearInterval(pollingRef.current!);
+        pollingRef.current = null;
+        setPollingStatus("timeout");
+      }
+    }, 5000);
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [pollingPlan]);
+
+  function stopPolling() {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = null;
+    setPollingPlan(null);
+  }
+
+  async function checkNow() {
+    if (!pollingPlan) return;
+    try {
+      const { plan } = await getPlanStatus();
+      if (plan === pollingPlan.id) {
+        stopPolling();
+        updateAuthPlan(plan as Parameters<typeof updateAuthPlan>[0]);
+        setLocalPlan(plan as PlanId);
+        setSuccess(`Plano ${pollingPlan.name} ativado com sucesso!`);
+        setTimeout(() => setSuccess(null), 6000);
+      }
+    } catch { /* ignora */ }
+  }
 
   const currentMeta = PLANS.find(p => p.id === localPlan)!;
   const isWhiteLabel = localPlan === "whitelabel";
@@ -186,13 +244,19 @@ export default function PlanManagementPage() {
     setLoading(true);
     setError(null);
     try {
-      const { paymentLink: link } = await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
-      if (link) {
-        // Upgrade: aguarda pagamento via Asaas
-        setPaymentLink(link);
-        setPaymentPlan(target);
+      const action = getAction(target);
+      const result = await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
+      if (action === "upgrade") {
+        if (!result.paymentLink) throw new Error("Não foi possível gerar o link de pagamento. Tente novamente.");
+        setPayment({
+          plan: target,
+          invoiceUrl: result.paymentLink,
+          pixPayload: result.pixPayload,
+          pixQrCodeImage: result.pixQrCodeImage,
+          dueDate: result.dueDate,
+        });
       } else {
-        // Downgrade para free: imediato
+        // Downgrade para free: imediato (plano só muda no DB após webhook confirmar; aqui atualiza sessão local)
         updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
         setLocalPlan(target.id);
         setSuccess(`Plano alterado para ${target.name} com sucesso!`);
@@ -232,6 +296,37 @@ export default function PlanManagementPage() {
           <AlertTriangle size={16} className="shrink-0 text-red-500" />
           <p className="text-sm font-semibold text-red-700 flex-1">{error}</p>
           <button onClick={() => setError(null)} className="text-red-400 hover:text-red-600">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* ── Banner de aguardo de pagamento ──────────────────────────────── */}
+      {pollingPlan && (
+        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+          {pollingStatus === "waiting" ? (
+            <Loader2 size={16} className="shrink-0 animate-spin text-blue-500" />
+          ) : (
+            <Clock size={16} className="shrink-0 text-orange-500" />
+          )}
+          <div className="flex-1">
+            {pollingStatus === "waiting" ? (
+              <p className="text-sm font-semibold text-blue-700">
+                Aguardando confirmação do pagamento para o plano <strong>{pollingPlan.name}</strong>…
+              </p>
+            ) : (
+              <p className="text-sm font-semibold text-orange-700">
+                Pagamento ainda não confirmado. Clique em "Verificar" ou faça logout e login após pagar.
+              </p>
+            )}
+          </div>
+          <button
+            onClick={checkNow}
+            className="flex shrink-0 items-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-black text-blue-600 transition-colors hover:bg-blue-50"
+          >
+            <RefreshCw size={11} /> Verificar
+          </button>
+          <button onClick={stopPolling} className="shrink-0 text-blue-300 hover:text-blue-500">
             <X size={14} />
           </button>
         </div>
@@ -701,51 +796,110 @@ export default function PlanManagementPage() {
       )}
 
       {/* ── Modal: pagamento Asaas ──────────────────────────────────────── */}
-      {paymentLink && paymentPlan && (
+      {payment && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(11,17,32,0.65)", backdropFilter: "blur(5px)" }}
+          style={{ background: "rgba(11,17,32,0.75)", backdropFilter: "blur(6px)" }}
         >
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#f0fdf4]">
-              <CreditCard size={22} className="text-[#16a34a]" />
-            </div>
-
-            <h2 className="mt-3 text-xl font-black text-[#0f172a]">
-              Finalizar pagamento
-            </h2>
-            <p className="mt-2 text-sm text-[#64748b]">
-              Uma assinatura recorrente de <strong>{paymentPlan.price}/mês</strong> foi criada para o plano{" "}
-              <strong>{paymentPlan.name}</strong>. Realize o pagamento para ativar o plano.
-            </p>
-
-            <div className="mt-4 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
-              <div className="flex items-start gap-3">
-                <Clock size={15} className="mt-0.5 shrink-0 text-[#94a3b8]" />
-                <p className="text-xs text-[#64748b]">
-                  Após o pagamento confirmado, seu plano será ativado automaticamente.
-                  Pode levar alguns minutos. Faça logout e login novamente para ver o novo plano.
-                </p>
+          <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl overflow-hidden">
+            {/* Cabeçalho */}
+            <div className="px-6 pt-6 pb-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f0fdf4]">
+                  <CreditCard size={20} className="text-[#16a34a]" />
+                </div>
+                <button
+                  onClick={() => { setPayment(null); }}
+                  className="text-[#94a3b8] hover:text-[#64748b]"
+                >
+                  <X size={18} />
+                </button>
               </div>
+              <h2 className="text-xl font-black text-[#0f172a]">Pagamento — Plano {payment.plan.name}</h2>
+              <p className="mt-1 text-sm text-[#64748b]">
+                Assinatura recorrente de <strong>{payment.plan.price}/mês</strong>. Ative agora para liberar todos os recursos.
+              </p>
+              {payment.dueDate && (
+                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-3 py-1">
+                  <Clock size={11} className="text-orange-500" />
+                  <span className="text-xs font-semibold text-orange-600">
+                    Vencimento: {new Date(payment.dueDate + "T12:00:00").toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={() => { setPaymentLink(null); setPaymentPlan(null); }}
-                className="flex-1 rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
-              >
-                Fechar
-              </button>
+            {/* PIX QR Code */}
+            {payment.pixQrCodeImage && (
+              <div className="mx-6 mb-4 rounded-2xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                <p className="mb-3 text-center text-xs font-black uppercase tracking-widest text-[#94a3b8]">
+                  Pagar via PIX
+                </p>
+                <div className="flex justify-center">
+                  <img
+                    src={`data:image/png;base64,${payment.pixQrCodeImage}`}
+                    alt="QR Code PIX"
+                    className="h-44 w-44 rounded-xl"
+                  />
+                </div>
+                {payment.pixPayload && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(payment.pixPayload!);
+                      setPixCopied(true);
+                      setTimeout(() => setPixCopied(false), 3000);
+                    }}
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white py-2.5 text-xs font-black transition-colors hover:bg-[#f0fdf4]"
+                    style={{ color: pixCopied ? "#16a34a" : "#475569" }}
+                  >
+                    {pixCopied ? (
+                      <><Check size={13} className="text-[#16a34a]" /> Código copiado!</>
+                    ) : (
+                      <><CreditCard size={13} /> Copiar código PIX</>
+                    )}
+                  </button>
+                )}
+                <div className="mt-3 flex items-start gap-2 rounded-xl bg-blue-50 px-3 py-2">
+                  <Loader2 size={12} className="mt-0.5 shrink-0 animate-spin text-blue-500" />
+                  <p className="text-xs text-blue-700">
+                    Após o pagamento PIX, seu plano será ativado automaticamente em segundos.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Separador ou opção alternativa */}
+            {payment.pixQrCodeImage && (
+              <div className="mx-6 mb-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#e2e8f0]" />
+                <span className="text-xs text-[#94a3b8]">ou pague com outro método</span>
+                <div className="h-px flex-1 bg-[#e2e8f0]" />
+              </div>
+            )}
+
+            {/* Botões */}
+            <div className="px-6 pb-6 flex flex-col gap-3">
               <a
-                href={paymentLink}
+                href={payment.invoiceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => { setPaymentLink(null); setPaymentPlan(null); }}
-                className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-3 text-sm font-black text-white transition-colors"
-                style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.35)" }}
+                onClick={() => {
+                  const plan = payment.plan;
+                  setPayment(null);
+                  setPollingPlan(plan);
+                }}
+                className="flex items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black text-white transition-colors"
+                style={{ background: "linear-gradient(135deg, #16a34a, #15803d)", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}
               >
-                <ExternalLink size={14} /> Ir para pagamento
+                <ExternalLink size={14} />
+                {payment.pixQrCodeImage ? "Abrir checkout completo (cartão, boleto…)" : "Ir para pagamento"}
               </a>
+              <button
+                onClick={() => { setPayment(null); }}
+                className="rounded-2xl border border-[#e2e8f0] bg-white py-3 text-sm font-black text-[#64748b] transition-colors hover:bg-[#f8fafc]"
+              >
+                Cancelar
+              </button>
             </div>
           </div>
         </div>
