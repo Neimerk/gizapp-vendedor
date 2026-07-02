@@ -1014,21 +1014,24 @@ export async function getInvoices(): Promise<Invoice[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data } = await supabase
-    .from("subscription_events")
-    .select("id, to_plan, created_at, metadata")
+    .from("subscription_invoices")
+    .select("id, plan, amount, status, asaas_payment_id, paid_at, due_date, description, created_at")
     .eq("vendor_id", user.id)
     .order("created_at", { ascending: false })
     .limit(24);
-  return (data ?? []).map(e => ({
-    id:          e.id,
-    value:       Number((e.metadata as Record<string, unknown>)?.amount ?? 0),
-    netValue:    Number((e.metadata as Record<string, unknown>)?.amount ?? 0),
-    status:      "CONFIRMED",
+  return (data ?? []).map(r => ({
+    id:          r.id as string,
+    value:       Number(r.amount),
+    netValue:    Number(r.amount),
+    status:      r.status === "paid"    ? "CONFIRMED"
+               : r.status === "overdue" ? "OVERDUE"
+               : r.status === "refunded"? "REFUNDED"
+               : "PENDING",
     billingType: "PIX",
-    dueDate:     (e.created_at as string).slice(0, 10),
-    paymentDate: (e.created_at as string).slice(0, 10),
+    dueDate:     ((r.due_date ?? (r.created_at as string).slice(0, 10)) as string),
+    paymentDate: r.paid_at ? (r.paid_at as string).slice(0, 10) : null,
     invoiceUrl:  null,
-    description: `Plano ${e.to_plan}`,
+    description: (r.description as string | null) ?? `Plano ${r.plan}`,
   }));
 }
 
