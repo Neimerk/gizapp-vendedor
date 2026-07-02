@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { RefreshCw, ReceiptText, Search, X, AlertCircle, Phone, Banknote, QrCode, Clock, CheckCircle2 } from "lucide-react";
-import { confirmCashPayment } from "../services/gizApi";
+import { RefreshCw, ReceiptText, Search, X, AlertCircle, Phone, Banknote, QrCode, Clock, CheckCircle2, RotateCcw } from "lucide-react";
+import { confirmCashPayment, requestRefund } from "../services/gizApi";
 
 import Pagination from "../components/ui/Pagination";
 import { usePagination } from "../hooks/usePagination";
@@ -103,6 +103,158 @@ function getNextAction(status: number) {
 
 const PAGE_SIZE = 10;
 
+// ── Modal de estorno ──────────────────────────────────────────────────────────
+const REFUND_REASONS = [
+  "Produto errado entregue",
+  "Produto danificado na entrega",
+  "Pedido não entregue",
+  "Cliente desistiu após pagamento",
+  "Cobrança duplicada",
+  "Outro motivo",
+] as const;
+
+function RefundModal({
+  order,
+  onClose,
+  onSuccess,
+}: {
+  order: { id: string; total: number; customerName: string };
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [reason,       setReason]       = useState<string>(REFUND_REASONS[0]);
+  const [customReason, setCustomReason] = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState<string | null>(null);
+  const [done,         setDone]         = useState(false);
+
+  async function handleConfirm() {
+    const finalReason = reason === "Outro motivo" ? customReason.trim() : reason;
+    if (!finalReason) { setError("Informe o motivo do estorno."); return; }
+
+    setError(null);
+    setLoading(true);
+    try {
+      await requestRefund(order.id, finalReason);
+      setDone(true);
+      setTimeout(() => { onSuccess(); onClose(); }, 1_800);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível solicitar o estorno.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      style={{ background: "rgba(15,23,42,0.55)", backdropFilter: "blur(3px)" }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-md overflow-hidden rounded-t-3xl bg-white sm:rounded-2xl"
+        style={{ boxShadow: "0 24px 60px rgba(0,0,0,.2)" }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#f1f5f9] px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50">
+              <RotateCcw size={16} className="text-orange-500" />
+            </div>
+            <div>
+              <p className="text-sm font-black text-[#0f172a]">Solicitar estorno</p>
+              <p className="text-xs text-[#94a3b8]">{order.customerName} · {formatMoney(order.total)}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-xl p-1.5 text-[#94a3b8] hover:bg-[#f8fafc]">
+            <X size={18} />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-10">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-50">
+              <CheckCircle2 size={28} className="text-green-600" />
+            </div>
+            <p className="font-black text-[#0f172a]">Estorno solicitado!</p>
+            <p className="text-sm text-[#64748b]">O valor será devolvido ao cliente em breve.</p>
+          </div>
+        ) : (
+          <div className="space-y-4 px-6 py-5">
+            {/* Aviso */}
+            <div className="flex gap-3 rounded-xl bg-orange-50 px-4 py-3">
+              <AlertCircle size={15} className="mt-0.5 shrink-0 text-orange-500" />
+              <p className="text-xs text-orange-700 leading-relaxed">
+                O estorno é irreversível. O valor será devolvido integralmente ao cliente via método de pagamento original.
+              </p>
+            </div>
+
+            {/* Motivo */}
+            <div className="space-y-2">
+              <p className="text-xs font-black uppercase tracking-wider text-[#94a3b8]">Motivo</p>
+              {REFUND_REASONS.map(r => (
+                <label
+                  key={r}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors"
+                  style={{
+                    borderColor: reason === r ? "#16a34a" : "#e2e8f0",
+                    background:  reason === r ? "#f0fdf4"  : "#fff",
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="refund-reason"
+                    value={r}
+                    checked={reason === r}
+                    onChange={() => setReason(r)}
+                    className="accent-green-600"
+                  />
+                  <span className="text-sm font-semibold text-[#0f172a]">{r}</span>
+                </label>
+              ))}
+            </div>
+
+            {reason === "Outro motivo" && (
+              <textarea
+                value={customReason}
+                onChange={e => setCustomReason(e.target.value)}
+                placeholder="Descreva o motivo…"
+                rows={3}
+                className="w-full resize-none rounded-xl border border-[#e2e8f0] bg-[#f8fafc] px-4 py-3 text-sm text-[#0f172a] outline-none focus:border-green-500"
+              />
+            )}
+
+            {error && (
+              <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3">
+                <AlertCircle size={14} className="shrink-0 text-red-500" />
+                <p className="text-xs text-red-600">{error}</p>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1 pb-2">
+              <button
+                onClick={onClose}
+                className="flex-1 rounded-xl border border-[#e2e8f0] py-3 text-sm font-black text-[#64748b] hover:bg-[#f8fafc]"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void handleConfirm()}
+                disabled={loading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-black text-white transition-all active:scale-[0.97] disabled:opacity-60"
+                style={{ background: loading ? "#94a3b8" : "linear-gradient(135deg,#ea580c,#c2410c)", boxShadow: loading ? "none" : "0 4px 12px rgba(234,88,12,.3)" }}
+              >
+                {loading ? <><RefreshCw size={14} className="animate-spin" /> Processando…</> : <><RotateCcw size={14} /> Confirmar estorno</>}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function OrdersPage() {
   const { orders, loading, refresh, updateOrderStatus } = useOrdersStore();
 
@@ -113,6 +265,7 @@ export default function OrdersPage() {
   const [dateFilter,    setDateFilter]    = useState<DateFilter>("all");
   const [search,        setSearch]        = useState("");
   const [errorMsg,      setErrorMsg]      = useState<string | null>(null);
+  const [refundOrder,   setRefundOrder]   = useState<{ id: string; total: number; customerName: string } | null>(null);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -419,6 +572,20 @@ export default function OrdersPage() {
                             )}
                           </>
                         )}
+                        {/* Botão de estorno: pedido entregue com pagamento digital confirmado */}
+                        {order.status === 4 &&
+                          !["refund_requested","refunded","chargeback"].includes(order.paymentStatus) &&
+                          !/dinheiro|cash/i.test(order.paymentMethod) &&
+                          ["paid","received","confirmed"].includes(order.paymentStatus) && (
+                          <button
+                            onClick={() => setRefundOrder({ id: order.id, total: order.total, customerName: order.customerName })}
+                            className="flex items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-xs font-black text-orange-600 transition-colors hover:bg-orange-100"
+                            title="Solicitar estorno"
+                          >
+                            <RotateCcw size={12} />
+                            Estornar
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -435,6 +602,14 @@ export default function OrdersPage() {
             onPageChange={setPage}
           />
         </>
+      )}
+
+      {refundOrder && (
+        <RefundModal
+          order={refundOrder}
+          onClose={() => setRefundOrder(null)}
+          onSuccess={() => void handleRefresh()}
+        />
       )}
     </div>
   );

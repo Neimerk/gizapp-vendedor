@@ -10,7 +10,7 @@ import { changePlan, getPlanStatus, getInvoices, type Invoice } from "../service
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 
-type PlanId = "free" | "start" | "pro" | "whitelabel";
+type PlanId = "basico" | "premium" | "whitelabel";
 
 type PlanMeta = {
   id: PlanId;
@@ -27,9 +27,8 @@ type CompareRow = {
   icon?: React.ElementType;
   category?: string;
   label: string;
-  free: string | boolean;
-  start: string | boolean;
-  pro: string | boolean;
+  basico: string | boolean;
+  premium: string | boolean;
   whitelabel: string | boolean;
 };
 
@@ -37,29 +36,11 @@ type CompareRow = {
 
 const PLANS: PlanMeta[] = [
   {
-    id: "free" as PlanId,
-    name: "Free",
-    price: "R$0",
-    period: "/mês",
-    description: "Para quem está começando sem compromisso.",
-    limits: { products: "50", featured: "3", stores: "1", categories: "3", support: "Comunidade" },
-    features: [
-      "50 produtos ativos",
-      "3 destaques no Shopping",
-      "3 categorias de loja",
-      "1 loja por CPF/CNPJ",
-      "Dashboard básico",
-      "Pedidos ilimitados",
-      "Gestão de entregas",
-      "WebSocket tempo real",
-    ],
-  },
-  {
-    id: "start" as PlanId,
+    id: "basico" as PlanId,
     name: "Básico",
-    price: "R$49",
+    price: "R$49,90",
     period: "/mês",
-    description: "Para lojistas que precisam de mais visibilidade.",
+    description: "Para lojistas iniciantes que precisam de visibilidade e rastreamento.",
     limits: { products: "300", featured: "15", stores: "3", categories: "15", support: "E-mail" },
     features: [
       "300 produtos ativos",
@@ -75,9 +56,9 @@ const PLANS: PlanMeta[] = [
     ],
   },
   {
-    id: "pro" as PlanId,
+    id: "premium" as PlanId,
     name: "Premium",
-    price: "R$99",
+    price: "R$99,90",
     period: "/mês",
     description: "Para crescer com analytics avançados e múltiplas lojas.",
     badge: "Mais popular",
@@ -92,15 +73,15 @@ const PLANS: PlanMeta[] = [
       "Gestão de entregas",
       "WebSocket tempo real",
       "Relatórios avançados com IA",
-      "Acesso à API REST",
+      "Chat integrado com clientes",
       "Suporte prioritário",
     ],
   },
   {
     id: "whitelabel" as PlanId,
     name: "White Label",
-    price: "Consulte",
-    period: "",
+    price: "R$299,90",
+    period: "/mês",
     description: "Solução enterprise com sua marca, domínio próprio e SLA garantido.",
     badge: "Enterprise",
     limits: { products: "∞", featured: "∞", stores: "∞", categories: "∞", support: "Dedicado 24/7" },
@@ -126,30 +107,31 @@ const PLANS: PlanMeta[] = [
 ];
 
 const COMPARE: CompareRow[] = [
-  { icon: Package, category: "Catálogo", label: "Produtos ativos", free: "50", start: "300", pro: "1.000", whitelabel: "Ilimitado" },
-  { label: "Categorias de loja", free: "3", start: "15", pro: "Ilimitadas", whitelabel: "Ilimitadas" },
-  { icon: Star, category: "Vitrine", label: "Destaques no Shopping", free: "3", start: "15", pro: "30", whitelabel: "Ilimitados" },
-  { icon: Store, category: "Lojas", label: "Lojas por CPF/CNPJ", free: "1", start: "Até 3", pro: "Até 10", whitelabel: "Ilimitadas" },
-  { icon: BarChart3, category: "Analytics", label: "Dashboard de KPIs", free: "Básico", start: "Completo", pro: "Premium", whitelabel: "Customizado" },
-  { label: "Relatórios", free: false, start: "Básico", pro: "Avançado + IA", whitelabel: "BI integrado" },
-  { icon: Zap, category: "Pedidos", label: "Pedidos por mês", free: "Ilimitados", start: "Ilimitados", pro: "Ilimitados", whitelabel: "Ilimitados" },
-  { label: "WebSocket tempo real", free: true, start: true, pro: true, whitelabel: true },
-  { label: "Gestão de entregas", free: true, start: true, pro: true, whitelabel: true },
-  { icon: Code2, category: "API", label: "Acesso à API REST", free: false, start: false, pro: true, whitelabel: true },
-  { label: "Webhooks", free: false, start: false, pro: false, whitelabel: true },
-  { label: "Integração ERP/SAP", free: false, start: false, pro: false, whitelabel: true },
-  { icon: Globe, category: "Marca", label: "Domínio personalizado", free: false, start: false, pro: false, whitelabel: true },
-  { label: "Logo e marca próprios", free: false, start: false, pro: false, whitelabel: true },
-  { icon: Shield, category: "SLA", label: "Uptime garantido (SLA)", free: false, start: false, pro: false, whitelabel: "99,9%" },
-  { icon: Headphones, category: "Suporte", label: "Canal de suporte", free: "Comunidade", start: "E-mail", pro: "Prioritário", whitelabel: "Dedicado 24/7" },
-  { icon: Users, category: "Conta", label: "Gerente de conta", free: false, start: false, pro: false, whitelabel: true },
+  { icon: Package, category: "Catálogo", label: "Produtos ativos", basico: "300", premium: "1.000", whitelabel: "Ilimitado" },
+  { label: "Categorias de loja", basico: "15", premium: "Ilimitadas", whitelabel: "Ilimitadas" },
+  { icon: Star, category: "Vitrine", label: "Destaques no Shopping", basico: "15", premium: "30", whitelabel: "Ilimitados" },
+  { icon: Store, category: "Lojas", label: "Lojas por CPF/CNPJ", basico: "Até 3", premium: "Até 10", whitelabel: "Ilimitadas" },
+  { icon: BarChart3, category: "Analytics", label: "Dashboard de KPIs", basico: "Completo", premium: "Premium", whitelabel: "Customizado" },
+  { label: "Relatórios", basico: "Básico", premium: "Avançado + IA", whitelabel: "BI integrado" },
+  { icon: Zap, category: "Pedidos", label: "Pedidos por mês", basico: "Ilimitados", premium: "Ilimitados", whitelabel: "Ilimitados" },
+  { label: "WebSocket tempo real", basico: true, premium: true, whitelabel: true },
+  { label: "Gestão de entregas", basico: true, premium: true, whitelabel: true },
+  { label: "Chat com clientes", basico: false, premium: true, whitelabel: true },
+  { icon: Code2, category: "API", label: "Acesso à API REST", basico: false, premium: false, whitelabel: true },
+  { label: "Webhooks", basico: false, premium: false, whitelabel: true },
+  { label: "Integração ERP/SAP", basico: false, premium: false, whitelabel: true },
+  { icon: Globe, category: "Marca", label: "Domínio personalizado", basico: false, premium: false, whitelabel: true },
+  { label: "Logo e marca próprios", basico: false, premium: false, whitelabel: true },
+  { icon: Shield, category: "SLA", label: "Uptime garantido (SLA)", basico: false, premium: false, whitelabel: "99,9%" },
+  { icon: Headphones, category: "Suporte", label: "Canal de suporte", basico: "E-mail", premium: "Prioritário", whitelabel: "Dedicado 24/7" },
+  { icon: Users, category: "Conta", label: "Gerente de conta", basico: false, premium: false, whitelabel: true },
 ];
 
-const PLAN_ORDER: PlanId[] = ["free", "start", "pro", "whitelabel"];
+const PLAN_ORDER: PlanId[] = ["basico", "premium", "whitelabel"];
 
 function rank(id: PlanId) { return PLAN_ORDER.indexOf(id); }
 function cellVal(row: CompareRow, id: PlanId): string | boolean {
-  const key = id as keyof Pick<CompareRow, "free" | "start" | "pro" | "whitelabel">;
+  const key = id as keyof Pick<CompareRow, "basico" | "premium" | "whitelabel">;
   return row[key] as string | boolean;
 }
 
@@ -157,10 +139,11 @@ function cellVal(row: CompareRow, id: PlanId): string | boolean {
 
 export default function PlanManagementPage() {
   const auth = getAuth();
-  const rawPlan = auth?.plan ?? "free";
-  // Migrate legacy IDs that may still be in sessionStorage
+  const rawPlan = auth?.plan ?? "basico";
+  // Mapeia slugs legados → canônicos v2
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const initialPlan: PlanId = ((rawPlan as any) === "basic" ? "start" : (rawPlan as any) === "premium" ? "pro" : (rawPlan as any) === "white" ? "whitelabel" : rawPlan) as PlanId;
+  const legacyMap: Record<string, PlanId> = { free: "basico", start: "basico", basic: "basico", pro: "premium", white: "whitelabel" };
+  const initialPlan: PlanId = (legacyMap[rawPlan as string] ?? rawPlan) as PlanId;
 
   const [localPlan, setLocalPlan] = useState<PlanId>(initialPlan);
   const [pending, setPending]     = useState<PlanMeta | null>(null);
@@ -252,10 +235,9 @@ export default function PlanManagementPage() {
     setError(null);
     try {
       const action = getAction(target);
-      const result = await changePlan(target.id as "free" | "start" | "pro" | "whitelabel");
+      const result = await changePlan(target.id);
       if (result.activated) {
-        // Plano ativado imediatamente (downgrade ou free)
-        updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
+        updateAuthPlan(target.id);
         setLocalPlan(target.id);
         setSuccess(`Plano ${target.name} ativado com sucesso!`);
         setTimeout(() => setSuccess(null), 4000);
@@ -271,7 +253,7 @@ export default function PlanManagementPage() {
         setPollingPlan(target);
       } else {
         // Downgrade sem ativação imediata: aguarda webhook
-        updateAuthPlan(target.id as "free" | "start" | "pro" | "whitelabel");
+        updateAuthPlan(target.id);
         setLocalPlan(target.id);
         setSuccess(`Plano alterado para ${target.name} com sucesso!`);
         setTimeout(() => setSuccess(null), 4000);
@@ -285,7 +267,7 @@ export default function PlanManagementPage() {
     }
   }
 
-  const freePlan = PLANS.find(p => p.id === "free")!;
+  const basicoPlan = PLANS.find(p => p.id === "basico")!;
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -352,13 +334,13 @@ export default function PlanManagementPage() {
         style={{
           background: isWhiteLabel
             ? "linear-gradient(135deg, #0f172a, #1e293b)"
-            : localPlan === "free"
+            : localPlan === "basico"
             ? "white"
             : "linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)",
-          border: localPlan === "free" ? "1px solid #e2e8f0" : "none",
+          border: localPlan === "basico" ? "1px solid #e2e8f0" : "none",
           boxShadow: isWhiteLabel
             ? "0 12px 40px rgba(0,0,0,0.35)"
-            : localPlan === "free"
+            : localPlan === "basico"
             ? "0 2px 8px rgba(0,0,0,0.05)"
             : "0 12px 40px rgba(22,163,74,0.18)",
         }}
@@ -408,8 +390,8 @@ export default function PlanManagementPage() {
                 {currentMeta.period}
               </p>
             )}
-            {localPlan === "free" && (
-              <p className="mt-1 text-xs font-semibold text-[#94a3b8]">Gratuito para sempre</p>
+            {localPlan === "basico" && (
+              <p className="mt-1 text-xs font-semibold text-[#94a3b8]">R$49,90/mês</p>
             )}
           </div>
         </div>
@@ -428,7 +410,7 @@ export default function PlanManagementPage() {
               style={{
                 background: isWhiteLabel
                   ? "rgba(255,255,255,0.06)"
-                  : localPlan === "free"
+                  : localPlan === "basico"
                   ? "#f8fafc"
                   : "rgba(255,255,255,0.55)",
               }}
@@ -652,7 +634,7 @@ export default function PlanManagementPage() {
                     )}
                     <span className="font-medium text-[#0f172a]">{row.label}</span>
                   </td>
-                  {(["free", "start", "pro", "whitelabel"] as PlanId[]).map((pid) => {
+                  {(["basico", "premium", "whitelabel"] as PlanId[]).map((pid) => {
                     const val = cellVal(row, pid);
                     return (
                       <td
@@ -676,37 +658,36 @@ export default function PlanManagementPage() {
       )}
 
       {/* ── Cancelar assinatura ─────────────────────────────────────────── */}
-      {localPlan !== "free" && localPlan !== "whitelabel" && (
+      {localPlan === "premium" && (
         <div className="rounded-3xl border border-orange-100 bg-orange-50/40 p-6">
           <div className="mb-4 flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100">
               <AlertTriangle size={15} className="text-orange-600" />
             </div>
             <div>
-              <h2 className="text-base font-black text-orange-700">Cancelar assinatura</h2>
-              <p className="text-xs text-orange-500">Seu plano voltará para Free imediatamente</p>
+              <h2 className="text-base font-black text-orange-700">Fazer downgrade</h2>
+              <p className="text-xs text-orange-500">Seu plano voltará para Básico (R$49,90/mês)</p>
             </div>
           </div>
           <div className="flex flex-col gap-4 rounded-2xl border border-orange-100 bg-white p-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm font-black text-[#0f172a]">Cancelar plano {currentMeta.name}</p>
+              <p className="text-sm font-black text-[#0f172a]">Downgrade para Plano Básico</p>
               <p className="mt-0.5 text-xs text-[#64748b]">
-                Seu plano voltará para Free. Produtos além de 50, destaques acima de 3 e lojas extras
-                serão desativados automaticamente.
+                Seu plano será alterado para Básico (R$49,90/mês). Recursos exclusivos Premium como chat, relatórios avançados e despacho prioritário serão desativados automaticamente.
               </p>
             </div>
             <button
               onClick={() => { setError(null); setShowCancel(true); }}
               className="flex shrink-0 items-center gap-1.5 rounded-xl border border-orange-200 bg-orange-50 px-4 py-2 text-xs font-black text-orange-700 transition-colors hover:bg-orange-100"
             >
-              Cancelar assinatura
+              Downgrade para Básico
             </button>
           </div>
         </div>
       )}
 
       {/* ── Histórico de faturas ────────────────────────────────────────── */}
-      {localPlan !== "free" || invoices.length > 0 ? (
+      {invoices.length > 0 || localPlan !== "basico" ? (
         <div className="rounded-3xl border border-[#e2e8f0] bg-white">
           <div className="flex items-center justify-between border-b border-[#f1f5f9] px-6 py-4">
             <div className="flex items-center gap-2">
@@ -999,19 +980,18 @@ export default function PlanManagementPage() {
               <AlertTriangle size={22} className="text-orange-600" />
             </div>
 
-            <h2 className="mt-3 text-xl font-black text-[#0f172a]">Cancelar assinatura?</h2>
+            <h2 className="mt-3 text-xl font-black text-[#0f172a]">Confirmar downgrade?</h2>
             <p className="mt-2 text-sm text-[#64748b]">
-              Seu plano voltará para <strong>Free</strong> imediatamente e os seguintes limites
-              serão aplicados:
+              Seu plano será alterado para <strong>Básico</strong> (R$49,90/mês) e os seguintes limites serão aplicados:
             </p>
 
             <div className="mt-3 rounded-2xl border border-orange-100 bg-orange-50 p-4">
               <ul className="space-y-1.5 text-xs font-semibold text-orange-700">
-                <li>• Máximo de 50 produtos ativos (excedentes desativados)</li>
-                <li>• Máximo de 3 destaques no Shopping (excedentes removidos)</li>
-                <li>• Máximo de 3 categorias de loja</li>
-                <li>• Apenas 1 loja por CPF/CNPJ</li>
-                <li>• Suporte apenas via comunidade</li>
+                <li>• Máximo de 300 produtos ativos</li>
+                <li>• Máximo de 15 destaques no Shopping</li>
+                <li>• Até 3 lojas por CPF/CNPJ</li>
+                <li>• Chat e despacho prioritário desativados</li>
+                <li>• Suporte via e-mail</li>
               </ul>
             </div>
 
@@ -1031,13 +1011,13 @@ export default function PlanManagementPage() {
                 Manter plano
               </button>
               <button
-                onClick={() => handleChangePlan(freePlan)}
+                onClick={() => handleChangePlan(basicoPlan)}
                 disabled={loading}
                 className="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-orange-500 py-3 text-sm font-black text-white transition-colors hover:bg-orange-600 disabled:opacity-60"
               >
                 {loading
-                  ? <><Loader2 size={14} className="animate-spin" /> Cancelando…</>
-                  : "Confirmar cancelamento"
+                  ? <><Loader2 size={14} className="animate-spin" /> Alterando…</>
+                  : "Confirmar downgrade"
                 }
               </button>
             </div>

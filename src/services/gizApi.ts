@@ -976,7 +976,7 @@ export async function getPlanStatus(): Promise<{ plan: string }> {
     .eq("vendor_id", user.id)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return { plan: data?.plan ?? "free" };
+  return { plan: data?.plan ?? "basico" };
 }
 
 export type ChangePlanResult = {
@@ -985,7 +985,7 @@ export type ChangePlanResult = {
   dueDate: string | null; activated: boolean;
 };
 
-export async function changePlan(planId: "free" | "start" | "pro" | "whitelabel"): Promise<ChangePlanResult> {
+export async function changePlan(planId: "basico" | "premium" | "whitelabel"): Promise<ChangePlanResult> {
   const { data, error } = await supabase.functions.invoke<{
     ok: boolean; plan: string; activated: boolean;
     firstPayment?: { pixCode: string; pixQrCode: string; dueDate: string; expirationDate: string } | null;
@@ -1011,28 +1011,41 @@ export type Invoice = {
 };
 
 export async function getInvoices(): Promise<Invoice[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  // Tabela canônica v2 — RLS filtra automaticamente pelo lojista autenticado
+  type Row = {
+    id: string; total: number; status: string;
+    due_date: string | null; paid_at: string | null;
+    period_start: string; period_end: string | null;
+  };
+
   const { data } = await supabase
-    .from("subscription_invoices")
-    .select("id, plan, amount, status, asaas_payment_id, paid_at, due_date, description, created_at")
-    .eq("vendor_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(24);
-  return (data ?? []).map(r => ({
-    id:          r.id as string,
-    value:       Number(r.amount),
-    netValue:    Number(r.amount),
-    status:      r.status === "paid"    ? "CONFIRMED"
-               : r.status === "overdue" ? "OVERDUE"
-               : r.status === "refunded"? "REFUNDED"
-               : "PENDING",
-    billingType: "PIX",
-    dueDate:     ((r.due_date ?? (r.created_at as string).slice(0, 10)) as string),
-    paymentDate: r.paid_at ? (r.paid_at as string).slice(0, 10) : null,
-    invoiceUrl:  null,
-    description: (r.description as string | null) ?? `Plano ${r.plan}`,
-  }));
+    .from("invoices")
+    .select("id, total, status, due_date, paid_at, period_start, period_end")
+    .order("period_start", { ascending: false })
+    .limit(24) as unknown as { data: Row[] | null };
+
+  const V2_STATUS: Record<string, string> = {
+    paid: "CONFIRMED", open: "PENDING", draft: "PENDING",
+    void: "CANCELLED", uncollectible: "OVERDUE",
+  };
+
+  return (data ?? []).map(r => {
+    const isOverdue = r.status === "open" && r.due_date != null && new Date(r.due_date) < new Date();
+    const periodLabel = new Date(r.period_start + (r.period_start.length === 10 ? "T12:00:00" : ""))
+      .toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    const dueRef = r.due_date ?? r.period_end ?? r.period_start;
+    return {
+      id:          r.id,
+      value:       Number(r.total ?? 0),
+      netValue:    Number(r.total ?? 0),
+      status:      isOverdue ? "OVERDUE" : (V2_STATUS[r.status] ?? "PENDING"),
+      billingType: "PIX",
+      dueDate:     dueRef.slice(0, 10),
+      paymentDate: r.paid_at ? r.paid_at.slice(0, 10) : null,
+      invoiceUrl:  null,
+      description: periodLabel.charAt(0).toUpperCase() + periodLabel.slice(1),
+    };
+  });
 }
 
 /* =========================
@@ -1171,4 +1184,25 @@ export async function getAdminWithdrawals(status = "pending"): Promise<Withdrawa
     processedAt:      r.processed_at,
     createdAt:        r.created_at,
   }));
+}
+
+// ── Estorno de pagamento ─────────────────────────────────────────────────────
+
+export async function requestRefund(
+  orderId: string,
+  reason: string,
+  amount?: number,
+): Promise<{ refundId: string; status: string; message: string }> {
+  const { data, error } = await supabase.functions.invoke<{
+    ok: boolean;
+    refundId: string;
+    status: string;
+    message: string;
+  }>("request-refund", {
+    body: { orderId, reason, amount },
+  });
+
+  if (error) throw new Error(error.message ?? "Erro ao solicitar estorno");
+  if (!data?.ok) throw new Error("Resposta inválida do servidor");
+  return { refundId: data.refundId, status: data.status, message: data.message };
 }

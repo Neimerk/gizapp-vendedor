@@ -9,7 +9,7 @@ export type AuthUser = {
   email: string;
   role: "Admin" | "Customer" | "Seller" | "Courier";
   storeId?: string | null;
-  plan?: "free" | "start" | "pro" | "whitelabel";
+  plan?: "basico" | "premium" | "whitelabel";
   // documentMasked: "049.***.***-11" — nunca o número completo
   documentMasked?: string | null;
   documentType?: "cpf" | "cnpj" | null;

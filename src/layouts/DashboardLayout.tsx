@@ -134,7 +134,7 @@ export default function DashboardLayout() {
 
     if (auth?.role === "Seller" || auth?.role === "Admin") {
       getVendorSubscription().then(sub => {
-        if (sub && (sub.status === "overdue" || sub.status === "suspended" || sub.status === "cancelled")) {
+        if (sub && (sub.status === "past_due" || sub.status === "cancelled")) {
           setSubStatus(sub.status);
         }
       }).catch(() => null);
@@ -421,14 +421,14 @@ export default function DashboardLayout() {
           <div
             className="flex items-center gap-3 px-4 py-2.5 text-sm font-semibold"
             style={{
-              background: subStatus === "overdue" ? "#fef3c7" : "#fee2e2",
-              borderBottom: `1px solid ${subStatus === "overdue" ? "#fde68a" : "#fecaca"}`,
-              color: subStatus === "overdue" ? "#92400e" : "#991b1b",
+              background: subStatus === "past_due" ? "#fef3c7" : "#fee2e2",
+              borderBottom: `1px solid ${subStatus === "past_due" ? "#fde68a" : "#fecaca"}`,
+              color: subStatus === "past_due" ? "#92400e" : "#991b1b",
             }}
           >
             <AlertTriangle size={15} className="shrink-0" />
             <span className="flex-1">
-              {subStatus === "overdue"
+              {subStatus === "past_due"
                 ? "Sua assinatura está vencida. Regularize para evitar suspensão da loja."
                 : "Sua assinatura foi cancelada. Faça o upgrade para reativar os recursos."}
             </span>

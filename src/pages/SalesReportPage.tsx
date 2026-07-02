@@ -137,7 +137,7 @@ export default function SalesReportPage() {
   const [period, setPeriod] = useState<Period>("30");
   const [refreshing, setRefreshing] = useState(false);
 
-  const isPaid = auth?.plan && auth.plan !== "free";
+  const isPaid = !!auth?.plan;
 
   // Todos os hooks devem ser chamados antes de qualquer early return (Rules of Hooks).
   // Quando !isPaid os valores ficam vazios/zero — não chegam a ser renderizados.
@@ -417,7 +417,7 @@ export default function SalesReportPage() {
         <div className="flex items-center gap-1.5 rounded-full border border-[#16a34a]/20 bg-[#f0fdf4] px-3 py-1">
           <Star size={10} className="text-[#16a34a]" />
           <span className="text-[10px] font-black text-[#16a34a] uppercase tracking-wide">
-            {auth?.plan === "whitelabel" ? "White Label" : auth?.plan === "pro" ? "Premium" : "Básico"} · Relatórios ativados
+            {auth?.plan === "whitelabel" ? "White Label" : auth?.plan === "premium" ? "Premium" : "Básico"} · Relatórios ativados
           </span>
         </div>
       </div>

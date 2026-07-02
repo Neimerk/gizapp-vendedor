@@ -1,13 +1,26 @@
 import { supabase } from "../lib/supabase";
 
-export type VendorPlan = "free" | "start" | "pro" | "whitelabel";
+// ── Tipos canônicos (alinhados com billing_plans v2) ─────────────────────────
+
+export type VendorPlanSlug = "basico" | "premium" | "whitelabel";
 
 export interface VendorSubscription {
-  plan:             VendorPlan;
-  status:           "trial" | "active" | "overdue" | "suspended" | "cancelled";
-  monthlyPrice:     number;
-  commissionRate:   number;
-  nextBillingDate:  string | null;
+  subscriptionId:  string;
+  planSlug:        VendorPlanSlug;
+  planName:        string;
+  status:          "trialing" | "active" | "past_due" | "cancelled" | "incomplete";
+  monthlyPrice:    number;
+  currentPeriodEnd: string | null;
+  trialEnd:        string | null;
+  features: {
+    realtime_tracking:  boolean;
+    chat:               boolean;
+    analytics:          "basic" | "full";
+    api_access:         boolean;
+    support:            "email" | "priority" | "dedicated";
+    priority_dispatch:  boolean;
+    custom_reports?:    boolean;
+  };
 }
 
 export interface VendorTransaction {
@@ -29,8 +42,11 @@ export interface VendorWallet {
   transactions: VendorTransaction[];
 }
 
-type RpcStrResult = { data: string | null; error: { message: string } | null };
-type BalanceResult = { data: { available: number; total: number; held: number } | null; error: { message: string } | null };
+type RpcStrResult     = { data: string | null; error: { message: string } | null };
+type BalanceResult    = { data: { available: number; total: number; held: number } | null; error: { message: string } | null };
+type JsonResult       = { data: Record<string, unknown> | null; error: { message: string } | null };
+
+// ── Carteira do lojista ───────────────────────────────────────────────────────
 
 export async function getVendorWallet(): Promise<VendorWallet> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -76,26 +92,32 @@ export async function getVendorWallet(): Promise<VendorWallet> {
   };
 }
 
+// ── Assinatura do lojista — usa RPC canônica (aceita auth.uid()) ──────────────
+
 export async function getVendorSubscription(): Promise<VendorSubscription | null> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  type SubRow = { plan: string; status: string; monthly_price: number; commission_rate: number; next_billing_date: string | null };
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("plan, status, monthly_price, commission_rate, next_billing_date")
-    .eq("vendor_id", user.id)
-    .maybeSingle() as unknown as { data: SubRow | null };
+  const { data, error } = await (
+    supabase.rpc as unknown as (name: string, args: Record<string, unknown>) => Promise<JsonResult>
+  )("get_vendor_subscription_by_owner", { p_owner_id: user.id });
 
+  if (error) throw new Error(error.message);
   if (!data) return null;
+
   return {
-    plan:            data.plan as VendorPlan,
-    status:          data.status as VendorSubscription["status"],
-    monthlyPrice:    Number(data.monthly_price),
-    commissionRate:  Number(data.commission_rate),
-    nextBillingDate: data.next_billing_date,
+    subscriptionId:   String(data.subscription_id),
+    planSlug:         data.plan_slug as VendorPlanSlug,
+    planName:         String(data.plan_name),
+    status:           data.status as VendorSubscription["status"],
+    monthlyPrice:     Number(data.monthly_price),
+    currentPeriodEnd: data.current_period_end ? String(data.current_period_end) : null,
+    trialEnd:         data.trial_end ? String(data.trial_end) : null,
+    features:         (data.features ?? {}) as VendorSubscription["features"],
   };
 }
+
+// ── Carteira do entregador ───────────────────────────────────────────────────
 
 export async function getCourierWallet(): Promise<VendorWallet> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -132,6 +154,8 @@ export async function getCourierWallet(): Promise<VendorWallet> {
   };
 }
 
+// ── Solicitação de saque — entregador ─────────────────────────────────────────
+
 export async function requestCourierWithdrawal(amount: number, pixKey: string, pixKeyType: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Não autenticado.");
@@ -156,6 +180,8 @@ export async function requestCourierWithdrawal(amount: number, pixKey: string, p
 
   if (error) throw new Error(error.message);
 }
+
+// ── Solicitação de saque — lojista ───────────────────────────────────────────
 
 export async function requestVendorWithdrawal(amount: number, pixKey: string, pixKeyType: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();

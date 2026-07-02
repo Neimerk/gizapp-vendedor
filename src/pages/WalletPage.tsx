@@ -4,9 +4,8 @@ import {
   Loader2, AlertTriangle, X, Check, RefreshCw, BarChart3, Search,
 } from "lucide-react";
 import {
-  getVendorWallet, getVendorSubscription,
-  requestVendorWithdrawal,
-  type VendorWallet, type VendorSubscription,
+  getVendorWallet, requestVendorWithdrawal,
+  type VendorWallet,
 } from "../services/wallet";
 import { reconcileOrders } from "../services/gizApi";
 
@@ -25,13 +24,6 @@ function relativeDate(iso: string) {
   return `${Math.floor(h / 24)}d atrás`;
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  free:       "Free",
-  start:      "Básico",
-  pro:        "Premium",
-  whitelabel: "White Label",
-};
-
 const PIX_TYPES = [
   { value: "cpf",    label: "CPF" },
   { value: "cnpj",   label: "CNPJ" },
@@ -44,7 +36,6 @@ const PIX_TYPES = [
 
 export default function WalletPage() {
   const [wallet, setWallet]       = useState<VendorWallet | null>(null);
-  const [sub, setSub]             = useState<VendorSubscription | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [showModal, setShowModal]       = useState(false);
@@ -63,9 +54,8 @@ export default function WalletPage() {
     setLoading(true);
     setError(null);
     try {
-      const [w, s] = await Promise.all([getVendorWallet(), getVendorSubscription()]);
+      const w = await getVendorWallet();
       setWallet(w);
-      setSub(s);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar carteira.");
     } finally {
@@ -219,9 +209,7 @@ export default function WalletPage() {
           </div>
           <p className="text-xs font-black uppercase tracking-widest text-[#94a3b8]">Total recebido</p>
           <p className="mt-1 text-3xl font-black text-[#0f172a]">{brl(totalEarned)}</p>
-          <p className="mt-2 text-xs text-[#94a3b8]">
-            Comissão: {sub ? `${(sub.commissionRate * 100).toFixed(0)}%` : "—"} — Plano {PLAN_LABELS[sub?.plan ?? "free"] ?? sub?.plan}
-          </p>
+          <p className="mt-2 text-xs text-[#94a3b8]">Acumulado de vendas</p>
         </div>
       </div>
 
