@@ -138,8 +138,9 @@ export default function SalesReportPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const isPaid = auth?.plan && auth.plan !== "free";
-  if (!isPaid) return <UpsellScreen />;
 
+  // Todos os hooks devem ser chamados antes de qualquer early return (Rules of Hooks).
+  // Quando !isPaid os valores ficam vazios/zero — não chegam a ser renderizados.
   const filtered = useMemo(() => filterByPeriod(orders, period), [orders, period]);
   const delivered = useMemo(() => filtered.filter(o => o.status === 4), [filtered]);
   const cancelled = useMemo(() => filtered.filter(o => o.status === 5), [filtered]);
@@ -148,7 +149,6 @@ export default function SalesReportPage() {
   const revenue    = useMemo(() => delivered.reduce((s, o) => s + Number(o.total), 0), [delivered]);
   const avgTicket  = useMemo(() => delivered.length > 0 ? revenue / delivered.length : 0, [revenue, delivered]);
 
-  // Top produtos por unidades vendidas
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
     for (const order of delivered) {
@@ -164,7 +164,6 @@ export default function SalesReportPage() {
     return [...map.values()].sort((a, b) => b.qty - a.qty).slice(0, 8);
   }, [delivered]);
 
-  // Métodos de pagamento
   const paymentMethods = useMemo(() => {
     const map = new Map<string, number>();
     for (const order of delivered) {
@@ -175,7 +174,6 @@ export default function SalesReportPage() {
       .map(([method, count]) => ({ method, count, pct: Math.round((count / delivered.length) * 100) }));
   }, [delivered]);
 
-  // Receita por dia (últimos N dias)
   const dailyRevenue = useMemo(() => {
     const days = period === "all" ? 30 : Number(period);
     const bins: { label: string; value: number }[] = [];
@@ -186,37 +184,31 @@ export default function SalesReportPage() {
         .filter(o => { const t = new Date(o.createdAt); return t >= d && t < next; })
         .reduce((s, o) => s + Number(o.total), 0);
       bins.push({
-        label: days <= 30
-          ? `${d.getDate()}/${d.getMonth() + 1}`
-          : `${d.getDate()}/${d.getMonth() + 1}`,
+        label: `${d.getDate()}/${d.getMonth() + 1}`,
         value: dayRevenue,
       });
     }
-    // Para 90 dias agrupa por semana para não ficar muito apertado
     if (days === 90) {
       const weekly: { label: string; value: number }[] = [];
       for (let i = 0; i < bins.length; i += 7) {
         const chunk = bins.slice(i, i + 7);
-        weekly.push({
-          label: chunk[0].label,
-          value: chunk.reduce((s, b) => s + b.value, 0),
-        });
+        weekly.push({ label: chunk[0].label, value: chunk.reduce((s, b) => s + b.value, 0) });
       }
       return weekly;
     }
-    // Para 30 dias mostra a cada 2 dias para não ter muita label
     if (days === 30) {
       return bins.filter((_, i) => i % 2 === 0 || i === bins.length - 1);
     }
     return bins;
   }, [delivered, period]);
 
-  // Status distribution
   const statusDist = useMemo(() => {
     const map = new Map<number, number>();
     for (const o of filtered) map.set(o.status, (map.get(o.status) ?? 0) + 1);
     return [...map.entries()].sort((a, b) => a[0] - b[0]);
   }, [filtered]);
+
+  if (!isPaid) return <UpsellScreen />;
 
   async function handleRefresh() {
     setRefreshing(true);
